@@ -1,0 +1,143 @@
+import { useState, useRef, useEffect } from 'react'
+import { Send, X, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
+import type { ChatMessage } from '@/lib/store'
+
+interface ChatProps {
+  messages: ChatMessage[]
+  onSend: (message: string) => void
+  onClose?: () => void
+  isLoading?: boolean
+}
+
+export function Chat({ messages, onSend, onClose, isLoading = false }: ChatProps) {
+  const [input, setInput] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
+
+  const handleSend = () => {
+    if (input.trim() && !isLoading) {
+      onSend(input.trim())
+      setInput('')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  return (
+    <div
+      data-testid="chat-panel"
+      className="flex flex-col h-full border-l bg-background"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <h2 className="font-semibold">Chat</h2>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="close"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Messages */}
+      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <div className="space-y-4">
+          {messages.map((message) => (
+            <MessageBubble key={message.id} message={message} onPivot={onSend} />
+          ))}
+          {isLoading && (
+            <div data-testid="chat-loading" className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Thinking...</span>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Input */}
+      <div className="p-4 border-t">
+        <div className="flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about the NetFlow data..."
+            disabled={isLoading}
+            className="flex-1"
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || isLoading}
+            aria-label="send"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface MessageBubbleProps {
+  message: ChatMessage
+  onPivot?: (query: string) => void
+}
+
+function MessageBubble({ message, onPivot }: MessageBubbleProps) {
+  const isUser = message.role === 'user'
+
+  return (
+    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+      <div
+        className={cn(
+          'max-w-[85%] rounded-lg px-3 py-2',
+          isUser
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted'
+        )}
+      >
+        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+
+        {/* SQL Query */}
+        {message.sql && (
+          <div className="mt-2 p-2 bg-background/50 rounded text-xs font-mono overflow-x-auto">
+            {message.sql}
+          </div>
+        )}
+
+        {/* Suggested Pivots */}
+        {message.suggestedPivots && message.suggestedPivots.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {message.suggestedPivots.map((pivot, index) => (
+              <button
+                key={index}
+                onClick={() => onPivot?.(pivot)}
+                className="text-xs px-2 py-1 rounded bg-background/50 hover:bg-background/80 transition-colors"
+              >
+                {pivot}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

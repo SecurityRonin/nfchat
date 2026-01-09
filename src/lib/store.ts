@@ -1,5 +1,16 @@
 import { create } from 'zustand';
-import type { AttackType } from './schema';
+import type { AttackType, FlowRecord } from './schema';
+import type { TimelineData } from '@/components/dashboard/Timeline';
+
+export interface AttackBreakdownData {
+  attack: string;
+  count: number;
+}
+
+export interface TopTalkerData {
+  ip: string;
+  value: number;
+}
 
 export interface FilterState {
   // Time range filter
@@ -68,6 +79,22 @@ export interface AppState extends FilterState {
   setDataLoading: (loading: boolean) => void;
   setDataError: (error: string | null) => void;
   setTotalRows: (rows: number) => void;
+
+  // Dashboard data
+  timelineData: TimelineData[];
+  attackBreakdown: AttackBreakdownData[];
+  topSrcIPs: TopTalkerData[];
+  topDstIPs: TopTalkerData[];
+  flows: Partial<FlowRecord>[];
+  totalFlowCount: number;
+  selectedFlow: Partial<FlowRecord> | null;
+  setTimelineData: (data: TimelineData[]) => void;
+  setAttackBreakdown: (data: AttackBreakdownData[]) => void;
+  setTopSrcIPs: (data: TopTalkerData[]) => void;
+  setTopDstIPs: (data: TopTalkerData[]) => void;
+  setFlows: (flows: Partial<FlowRecord>[]) => void;
+  setTotalFlowCount: (count: number) => void;
+  setSelectedFlow: (flow: Partial<FlowRecord> | null) => void;
 }
 
 const initialFilterState: FilterState = {
@@ -155,6 +182,23 @@ export const useStore = create<AppState>((set) => ({
   setDataLoading: (loading) => set({ dataLoading: loading }),
   setDataError: (error) => set({ dataError: error }),
   setTotalRows: (rows) => set({ totalRows: rows }),
+
+  // Dashboard data
+  timelineData: [],
+  attackBreakdown: [],
+  topSrcIPs: [],
+  topDstIPs: [],
+  flows: [],
+  totalFlowCount: 0,
+  selectedFlow: null,
+
+  setTimelineData: (data) => set({ timelineData: data }),
+  setAttackBreakdown: (data) => set({ attackBreakdown: data }),
+  setTopSrcIPs: (data) => set({ topSrcIPs: data }),
+  setTopDstIPs: (data) => set({ topDstIPs: data }),
+  setFlows: (flows) => set({ flows }),
+  setTotalFlowCount: (count) => set({ totalFlowCount: count }),
+  setSelectedFlow: (flow) => set({ selectedFlow: flow }),
 }));
 
 // Selector for building SQL WHERE clause from filters
