@@ -5,6 +5,35 @@ import duckdb_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?
 let db: duckdb.AsyncDuckDB | null = null;
 let conn: duckdb.AsyncDuckDBConnection | null = null;
 
+// Parquet magic bytes: "PAR1" at start and end of file
+const PARQUET_MAGIC = new Uint8Array([0x50, 0x41, 0x52, 0x31]); // "PAR1"
+
+/**
+ * Validate that a buffer contains a valid parquet file by checking magic bytes
+ */
+function validateParquetFile(buffer: ArrayBuffer): void {
+  const bytes = new Uint8Array(buffer);
+
+  if (bytes.length < 8) {
+    throw new Error('File is too small to be a valid Parquet file');
+  }
+
+  // Check start magic bytes
+  const startMagic = bytes.slice(0, 4);
+  const startValid = startMagic.every((b, i) => b === PARQUET_MAGIC[i]);
+
+  // Check end magic bytes
+  const endMagic = bytes.slice(-4);
+  const endValid = endMagic.every((b, i) => b === PARQUET_MAGIC[i]);
+
+  if (!startValid || !endValid) {
+    throw new Error(
+      'Invalid Parquet file: missing magic bytes. The file may be corrupted, ' +
+      'incomplete, or not a Parquet file. Please ensure you upload a valid .parquet file.'
+    );
+  }
+}
+
 export async function initDuckDB(): Promise<duckdb.AsyncDuckDB> {
   if (db) return db;
 
@@ -33,6 +62,9 @@ export async function loadParquetData(url: string): Promise<number> {
   const response = await fetch(url);
   const buffer = await response.arrayBuffer();
 
+  // Validate before registering
+  validateParquetFile(buffer);
+
   const database = await initDuckDB();
   await database.registerFileBuffer('flows.parquet', new Uint8Array(buffer));
 
@@ -59,6 +91,9 @@ export async function loadParquetFromFile(file: File): Promise<number> {
 
   // Read file as ArrayBuffer
   const buffer = await file.arrayBuffer();
+
+  // Validate before registering
+  validateParquetFile(buffer);
 
   // Register the file buffer with DuckDB
   await database.registerFileBuffer('flows.parquet', new Uint8Array(buffer));
