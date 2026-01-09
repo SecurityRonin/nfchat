@@ -10,7 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Database, AlertCircle, Loader2, Settings as SettingsIcon, Upload, Globe } from 'lucide-react'
 import { getApiKey } from '@/components/Settings'
-import { loadParquetFromFile } from '@/lib/duckdb'
+import {
+  loadParquetFromFile,
+  getTimelineData,
+  getAttackDistribution,
+  getTopTalkers,
+  getFlows,
+  getFlowCount,
+} from '@/lib/duckdb'
 
 const PARQUET_URL = '/data/NF-UNSW-NB15-v3.parquet'
 
@@ -24,26 +31,51 @@ function App() {
 
   const { loading, error } = useNetflowData(loadStarted ? PARQUET_URL : '')
 
+  const {
+    messages,
+    addMessage,
+    isLoading: chatLoading,
+    setIsLoading: setChatLoading,
+    setTimelineData,
+    setAttackBreakdown,
+    setTopSrcIPs,
+    setTopDstIPs,
+    setFlows,
+    setTotalFlowCount,
+  } = useStore()
+
   const handleLocalFileSelect = useCallback(async (file: File) => {
     setLocalFileLoading(true)
     setLocalFileError(null)
 
     try {
+      // Load the parquet file into DuckDB
       await loadParquetFromFile(file)
+
+      // Fetch dashboard data and populate the store
+      const [timeline, attacks, srcIPs, dstIPs, flows, flowCount] = await Promise.all([
+        getTimelineData(60),
+        getAttackDistribution(),
+        getTopTalkers('src', 'flows', 10),
+        getTopTalkers('dst', 'flows', 10),
+        getFlows('1=1', 1000, 0),
+        getFlowCount(),
+      ])
+
+      setTimelineData(timeline)
+      setAttackBreakdown(attacks)
+      setTopSrcIPs(srcIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
+      setTopDstIPs(dstIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
+      setFlows(flows)
+      setTotalFlowCount(flowCount)
+
       setLocalFileLoaded(true)
     } catch (err) {
       setLocalFileError(err instanceof Error ? err.message : 'Failed to load file')
     } finally {
       setLocalFileLoading(false)
     }
-  }, [])
-
-  const {
-    messages,
-    addMessage,
-    isLoading: chatLoading,
-    setIsLoading: setChatLoading,
-  } = useStore()
+  }, [setTimelineData, setAttackBreakdown, setTopSrcIPs, setTopDstIPs, setFlows, setTotalFlowCount])
 
   const handleLoadData = () => {
     setLoadStarted(true)
