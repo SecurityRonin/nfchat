@@ -31,3 +31,5 @@ datasets/
 # Playwright
 playwright-report/
 test-results/
+.vercel
+.env*.local

@@ -4,8 +4,9 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { execSync } from 'child_process'
 
-// Safe: build-time only, no user input
-const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
+// Use Vercel env var if available, otherwise git command for local dev
+const commitHash = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7)
+  || (() => { try { return execSync('git rev-parse --short HEAD').toString().trim() } catch { return 'unknown' } })()
 
 // https://vite.dev/config/
 export default defineConfig({
