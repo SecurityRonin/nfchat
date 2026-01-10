@@ -26,12 +26,11 @@ dist-ssr
 # Dataset files (large)
 datasets/
 *.csv
-# Parquet files everywhere except public/data (which uses Git LFS)
 *.parquet
-!public/data/*.parquet
 
 # Playwright
 playwright-report/
 test-results/
 .vercel
 .env*.local
+.playwright-mcp/
