@@ -9,10 +9,16 @@ import {
 } from '@/lib/duckdb'
 import { useStore } from '@/lib/store'
 
+interface LoadingProgress {
+  stage: string
+  percent: number
+}
+
 interface UseNetflowDataResult {
   loading: boolean
   error: string | null
   totalRows: number
+  progress: LoadingProgress
   refresh: (whereClause?: string) => Promise<void>
 }
 
@@ -21,6 +27,7 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
   const [error, setError] = useState<string | null>(null)
   const [totalRows, setTotalRows] = useState(0)
   const [dataLoaded, setDataLoaded] = useState(false)
+  const [progress, setProgress] = useState<LoadingProgress>({ stage: '', percent: 0 })
 
   const {
     setTimelineData,
@@ -68,13 +75,22 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
         setLoading(true)
         setError(null)
 
-        // Load parquet file
+        // Stage 1: Fetching file
+        setProgress({ stage: 'Fetching parquet file...', percent: 10 })
+
+        // Stage 2: Initialize DuckDB & load data
+        setProgress({ stage: 'Initializing DuckDB...', percent: 30 })
         const rowCount = await loadParquetData(parquetUrl)
         setTotalRows(rowCount)
 
-        // Fetch initial dashboard data
+        // Stage 3: Processing data
+        setProgress({ stage: 'Processing data...', percent: 60 })
+
+        // Stage 4: Building dashboard
+        setProgress({ stage: 'Building dashboard...', percent: 80 })
         await fetchDashboardData()
 
+        setProgress({ stage: 'Complete', percent: 100 })
         setDataLoaded(true)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error')
@@ -90,6 +106,7 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
     loading,
     error,
     totalRows,
+    progress,
     refresh,
   }
 }
