@@ -8,8 +8,7 @@ import { FileUploader, type FileType } from '@/components/FileUploader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Progress } from '@/components/ui/progress'
-import { Database, AlertCircle, Settings as SettingsIcon, Upload, Globe } from 'lucide-react'
+import { Database, AlertCircle, Loader2, Settings as SettingsIcon, Upload, Globe } from 'lucide-react'
 import { getApiKey } from '@/components/Settings'
 import {
   loadParquetFromFile,
@@ -31,9 +30,8 @@ function App() {
   const [localFileLoading, setLocalFileLoading] = useState(false)
   const [localFileLoaded, setLocalFileLoaded] = useState(false)
   const [localFileError, setLocalFileError] = useState<string | null>(null)
-  const [localProgress, setLocalProgress] = useState({ stage: '', percent: 0 })
 
-  const { loading, error, progress } = useNetflowData(loadStarted ? PARQUET_URL : '')
+  const { loading, error } = useNetflowData(loadStarted ? PARQUET_URL : '')
 
   const {
     messages,
@@ -51,11 +49,9 @@ function App() {
   const handleLocalFileSelect = useCallback(async (file: File, fileType: FileType) => {
     setLocalFileLoading(true)
     setLocalFileError(null)
-    setLocalProgress({ stage: 'Reading file...', percent: 10 })
 
     try {
       // Load the file into DuckDB based on type
-      setLocalProgress({ stage: 'Initializing DuckDB...', percent: 20 })
       switch (fileType) {
         case 'parquet':
           await loadParquetFromFile(file)
@@ -64,15 +60,11 @@ function App() {
           await loadCSVFromFile(file)
           break
         case 'zip':
-          setLocalProgress({ stage: 'Extracting archive...', percent: 30 })
           await loadZipFile(file)
           break
       }
 
-      setLocalProgress({ stage: 'Processing data...', percent: 50 })
-
       // Fetch dashboard data and populate the store
-      setLocalProgress({ stage: 'Building dashboard...', percent: 70 })
       const [timeline, attacks, srcIPs, dstIPs, flows, flowCount] = await Promise.all([
         getTimelineData(60),
         getAttackDistribution(),
@@ -82,7 +74,6 @@ function App() {
         getFlowCount(),
       ])
 
-      setLocalProgress({ stage: 'Finalizing...', percent: 90 })
       setTimelineData(timeline)
       setAttackBreakdown(attacks)
       setTopSrcIPs(srcIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
@@ -90,7 +81,6 @@ function App() {
       setFlows(flows)
       setTotalFlowCount(flowCount)
 
-      setLocalProgress({ stage: 'Complete', percent: 100 })
       setLocalFileLoaded(true)
     } catch (err) {
       setLocalFileError(err instanceof Error ? err.message : 'Failed to load file')
@@ -214,19 +204,17 @@ function App() {
 
   // Loading state (for both URL and local file)
   if (loading || localFileLoading) {
-    const currentProgress = localFileLoading ? localProgress : progress
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="py-8 flex flex-col items-center gap-4">
-            <Database className="h-8 w-8 text-primary" />
-            <p className="text-muted-foreground font-medium">Loading NetFlow data...</p>
-            <div className="w-full space-y-2">
-              <Progress value={currentProgress.percent} />
-              <p className="text-xs text-muted-foreground text-center">
-                {currentProgress.stage || 'Initializing...'}
-              </p>
-            </div>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading NetFlow data...</p>
+            <p className="text-xs text-muted-foreground">
+              {localFileLoading
+                ? 'Processing your parquet file...'
+                : 'This may take 30-60 seconds for ~100MB of data'}
+            </p>
           </CardContent>
         </Card>
       </div>
