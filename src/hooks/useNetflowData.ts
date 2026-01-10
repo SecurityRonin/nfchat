@@ -26,6 +26,36 @@ const initialProgress: ProgressEvent = {
   timestamp: Date.now(),
 }
 
+// Dashboard query definitions with time-proportional weights
+// Weights reflect typical query execution time relative to each other
+interface DashboardQuery {
+  name: string
+  label: string
+  weight: number // Relative time weight (higher = slower query)
+}
+
+const DASHBOARD_QUERIES: DashboardQuery[] = [
+  { name: 'timeline', label: 'Loading timeline data', weight: 50 },      // Heavy GROUP BY
+  { name: 'attacks', label: 'Loading attack distribution', weight: 5 },  // Small result set
+  { name: 'srcIPs', label: 'Loading top source IPs', weight: 15 },       // GROUP BY + sort
+  { name: 'dstIPs', label: 'Loading top destination IPs', weight: 15 },  // GROUP BY + sort
+  { name: 'flows', label: 'Loading flow records', weight: 10 },          // Simple LIMIT
+  { name: 'flowCount', label: 'Counting total flows', weight: 5 },       // Simple COUNT
+]
+
+const TOTAL_WEIGHT = DASHBOARD_QUERIES.reduce((sum, q) => sum + q.weight, 0)
+const BUILDING_START_PERCENT = 96
+const BUILDING_END_PERCENT = 100
+
+// Calculate progress percent after completing a query at given index
+function calculateProgress(completedIndex: number): number {
+  const completedWeight = DASHBOARD_QUERIES
+    .slice(0, completedIndex + 1)
+    .reduce((sum, q) => sum + q.weight, 0)
+  const progressRange = BUILDING_END_PERCENT - BUILDING_START_PERCENT
+  return Math.round(BUILDING_START_PERCENT + (completedWeight / TOTAL_WEIGHT) * progressRange)
+}
+
 export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,17 +77,35 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
     setLogs((prev) => [...prev, entry])
   }, [])
 
-  const fetchDashboardData = useCallback(async (whereClause: string = '1=1') => {
+  const fetchDashboardData = useCallback(async (
+    whereClause: string = '1=1',
+    onQueryProgress?: (query: DashboardQuery, index: number) => void
+  ) => {
     try {
-      // Fetch all dashboard data in parallel
-      const [timeline, attacks, srcIPs, dstIPs, flows, flowCount] = await Promise.all([
-        getTimelineData(60, whereClause),
-        getAttackDistribution(),
-        getTopTalkers('src', 'flows', 10, whereClause),
-        getTopTalkers('dst', 'flows', 10, whereClause),
-        getFlows(whereClause, 1000, 0),
-        getFlowCount(whereClause),
-      ])
+      // Execute queries sequentially with time-proportional progress updates
+      // Timeline (weight: 50 = 50% of dashboard build time)
+      onQueryProgress?.(DASHBOARD_QUERIES[0], 0)
+      const timeline = await getTimelineData(60, whereClause)
+
+      // Attack distribution (weight: 5 = 5% of dashboard build time)
+      onQueryProgress?.(DASHBOARD_QUERIES[1], 1)
+      const attacks = await getAttackDistribution()
+
+      // Top source IPs (weight: 15 = 15% of dashboard build time)
+      onQueryProgress?.(DASHBOARD_QUERIES[2], 2)
+      const srcIPs = await getTopTalkers('src', 'flows', 10, whereClause)
+
+      // Top destination IPs (weight: 15 = 15% of dashboard build time)
+      onQueryProgress?.(DASHBOARD_QUERIES[3], 3)
+      const dstIPs = await getTopTalkers('dst', 'flows', 10, whereClause)
+
+      // Flow records (weight: 10 = 10% of dashboard build time)
+      onQueryProgress?.(DASHBOARD_QUERIES[4], 4)
+      const flows = await getFlows(whereClause, 1000, 0)
+
+      // Flow count (weight: 5 = 5% of dashboard build time)
+      onQueryProgress?.(DASHBOARD_QUERIES[5], 5)
+      const flowCount = await getFlowCount(whereClause)
 
       // Update store
       setTimelineData(timeline)
@@ -92,20 +140,23 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
         })
         setTotalRows(rowCount)
 
-        // Build dashboard
-        setProgress({
-          stage: 'building',
-          percent: 96,
-          message: 'Building dashboard visualizations...',
-          timestamp: Date.now(),
-        })
-        addLog({
-          level: 'info',
-          message: 'Building dashboard visualizations',
-          timestamp: Date.now(),
-        })
+        // Build dashboard with time-proportional progress
+        const handleQueryProgress = (query: DashboardQuery, index: number) => {
+          const percent = calculateProgress(index)
+          setProgress({
+            stage: 'building',
+            percent,
+            message: query.label + '...',
+            timestamp: Date.now(),
+          })
+          addLog({
+            level: 'info',
+            message: `${query.label} (${percent}%)`,
+            timestamp: Date.now(),
+          })
+        }
 
-        await fetchDashboardData()
+        await fetchDashboardData('1=1', handleQueryProgress)
 
         // Complete
         setProgress({

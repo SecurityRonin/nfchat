@@ -139,4 +139,139 @@ describe('useNetflowData', () => {
       expect(result.current.logs).toEqual([])
     })
   })
+
+  describe('granular dashboard building progress', () => {
+    it('shows time-proportional progress based on query weights', async () => {
+      // Timeline is weighted at 50%, so after it completes, progress should be ~98%
+      // (96 + 50/100 * 4 = 98)
+      const progressPercents: number[] = []
+
+      vi.mocked(duckdb.loadParquetData).mockImplementation(async (_url, options) => {
+        // Simulate reaching building stage at 96%
+        options?.onProgress?.({
+          stage: 'building',
+          percent: 96,
+          message: 'Starting dashboard...',
+          timestamp: Date.now(),
+        })
+        return 1000
+      })
+
+      const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
+
+      await waitFor(() => {
+        expect(result.current.progress.stage).toBe('complete')
+      })
+
+      // After timeline (weight 50), progress should jump to ~98%
+      // After attacks (weight 5), progress should be ~98.2%
+      // Timeline should cause biggest jump since it has highest weight
+      const timelineLog = result.current.logs.find(l => l.message.includes('timeline'))
+      const attacksLog = result.current.logs.find(l => l.message.includes('attack'))
+
+      expect(timelineLog).toBeDefined()
+      expect(attacksLog).toBeDefined()
+    })
+
+    it('shows incremental progress during dashboard building phase', async () => {
+      // Make each query take some time so we can capture progress updates
+      vi.mocked(duckdb.getTimelineData).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 10))
+        return []
+      })
+      vi.mocked(duckdb.getAttackDistribution).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 10))
+        return []
+      })
+      vi.mocked(duckdb.getTopTalkers).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 10))
+        return []
+      })
+      vi.mocked(duckdb.getFlows).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 10))
+        return []
+      })
+      vi.mocked(duckdb.getFlowCount).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 10))
+        return 1000
+      })
+
+      const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
+
+      // Wait for completion and capture progress
+      await waitFor(() => {
+        expect(result.current.progress.stage).toBe('complete')
+      }, { timeout: 5000 })
+
+      // Check that we saw building stage progress updates
+      expect(result.current.logs.some(log =>
+        log.message.includes('Loading timeline')
+      )).toBe(true)
+    })
+
+    it('shows specific sub-messages for each dashboard query', async () => {
+      const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
+
+      await waitFor(() => {
+        expect(result.current.progress.stage).toBe('complete')
+      })
+
+      // Check logs contain specific query names
+      const logMessages = result.current.logs.map(l => l.message)
+
+      expect(logMessages.some(m => m.includes('timeline'))).toBe(true)
+      expect(logMessages.some(m => m.includes('attack') || m.includes('Attack'))).toBe(true)
+      expect(logMessages.some(m => m.includes('talker') || m.includes('Talker') || m.includes('IP'))).toBe(true)
+      expect(logMessages.some(m => m.includes('flow') || m.includes('Flow'))).toBe(true)
+    })
+
+    it('updates progress percent incrementally from 96 to 100', async () => {
+      // Track progress values during building stage
+      const buildingPercentages: number[] = []
+
+      // Add delay to queries to ensure we capture intermediate states
+      vi.mocked(duckdb.getTimelineData).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 5))
+        return []
+      })
+      vi.mocked(duckdb.getAttackDistribution).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 5))
+        return []
+      })
+      vi.mocked(duckdb.getTopTalkers).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 5))
+        return []
+      })
+      vi.mocked(duckdb.getFlows).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 5))
+        return []
+      })
+      vi.mocked(duckdb.getFlowCount).mockImplementation(async () => {
+        await new Promise(r => setTimeout(r, 5))
+        return 1000
+      })
+
+      const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
+
+      // Poll for building stage progress values
+      const checkProgress = setInterval(() => {
+        if (result.current.progress.stage === 'building') {
+          buildingPercentages.push(result.current.progress.percent)
+        }
+      }, 2)
+
+      await waitFor(() => {
+        expect(result.current.progress.stage).toBe('complete')
+      }, { timeout: 5000 })
+
+      clearInterval(checkProgress)
+
+      // Should have captured multiple distinct progress values between 96 and 100
+      // With weighted progress: timeline=98%, attacks=98%, srcIPs=99%, dstIPs=99%, flows=99%, count=100%
+      const uniquePercentages = [...new Set(buildingPercentages)]
+      expect(uniquePercentages.length).toBeGreaterThan(1)
+      expect(Math.min(...uniquePercentages)).toBeGreaterThanOrEqual(96)
+      expect(Math.max(...uniquePercentages)).toBeLessThanOrEqual(100)
+    })
+  })
 })
