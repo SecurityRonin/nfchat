@@ -137,6 +137,9 @@ function App() {
               <Database className="h-5 w-5" />
               nfchat - NetFlow Analysis
             </CardTitle>
+            <p className="text-[10px] text-muted-foreground font-mono">
+              {__COMMIT_HASH__} {__BUILD_TIME__}
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs defaultValue="upload" className="w-full">
