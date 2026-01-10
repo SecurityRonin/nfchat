@@ -8,7 +8,8 @@ import { FileUploader, type FileType } from '@/components/FileUploader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Database, AlertCircle, Loader2, Settings as SettingsIcon, Upload, Globe } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { Database, AlertCircle, Settings as SettingsIcon, Upload, Globe } from 'lucide-react'
 import { getApiKey } from '@/components/Settings'
 import {
   loadParquetFromFile,
@@ -30,8 +31,10 @@ function App() {
   const [localFileLoading, setLocalFileLoading] = useState(false)
   const [localFileLoaded, setLocalFileLoaded] = useState(false)
   const [localFileError, setLocalFileError] = useState<string | null>(null)
+  // Local file progress (currently not tracked, but used for unified loading UI)
+  const localProgress = { stage: 'Loading file...', percent: 0 }
 
-  const { loading, error } = useNetflowData(loadStarted ? PARQUET_URL : '')
+  const { loading, error, progress } = useNetflowData(loadStarted ? PARQUET_URL : '')
 
   const {
     messages,
@@ -204,17 +207,19 @@ function App() {
 
   // Loading state (for both URL and local file)
   if (loading || localFileLoading) {
+    const currentProgress = localFileLoading ? localProgress : progress
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="py-8 flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-muted-foreground">Loading NetFlow data...</p>
-            <p className="text-xs text-muted-foreground">
-              {localFileLoading
-                ? 'Processing your parquet file...'
-                : 'This may take 30-60 seconds for ~100MB of data'}
-            </p>
+            <Database className="h-8 w-8 text-primary" />
+            <p className="text-muted-foreground font-medium">Loading NetFlow data...</p>
+            <div className="w-full space-y-2">
+              <Progress value={currentProgress.percent} />
+              <p className="text-xs text-muted-foreground text-center">
+                {currentProgress.stage || 'Initializing...'}
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

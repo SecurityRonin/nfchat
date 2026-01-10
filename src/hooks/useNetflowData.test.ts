@@ -108,4 +108,21 @@ describe('useNetflowData', () => {
 
     expect(duckdb.getFlows).toHaveBeenCalledWith(expect.stringContaining('Exploits'), expect.any(Number), expect.any(Number))
   })
+
+  describe('progress tracking', () => {
+    it('returns progress object with stage and percent', () => {
+      const { result } = renderHook(() => useNetflowData(''))
+      expect(result.current.progress).toEqual({ stage: '', percent: 0 })
+    })
+
+    it('updates progress through loading stages', async () => {
+      const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
+
+      // Wait for progress to complete (progress is set before loading becomes false)
+      await waitFor(() => {
+        expect(result.current.progress.percent).toBe(100)
+        expect(result.current.progress.stage).toBe('Complete')
+      })
+    })
+  })
 })

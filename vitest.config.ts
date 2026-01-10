@@ -4,6 +4,10 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __BUILD_TIME__: JSON.stringify('2026-01-10T00:00:00.000Z'),
+    __COMMIT_HASH__: JSON.stringify('test123'),
+  },
   test: {
     globals: true,
     environment: 'jsdom',
