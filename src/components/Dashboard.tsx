@@ -41,7 +41,12 @@ export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
     <div data-testid="dashboard" className="h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="border-b px-4 py-3 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">nfchat</h1>
+        <div className="flex flex-col">
+          <h1 className="text-xl font-semibold">nfchat</h1>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            {__COMMIT_HASH__} {__BUILD_TIME__}
+          </span>
+        </div>
         <Button
           variant="outline"
           size="sm"
