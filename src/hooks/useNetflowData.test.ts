@@ -1,28 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useNetflowData } from './useNetflowData'
-import * as motherduck from '@/lib/motherduck'
+import * as apiClient from '@/lib/api-client'
 
-// Mock the motherduck module
-vi.mock('@/lib/motherduck', () => ({
-  loadParquetData: vi.fn(),
-  getTimelineData: vi.fn(),
-  getAttackDistribution: vi.fn(),
-  getTopTalkers: vi.fn(),
-  getFlows: vi.fn(),
-  getFlowCount: vi.fn(),
+// Mock the api-client module
+vi.mock('@/lib/api-client', () => ({
+  loadDataFromUrl: vi.fn(),
+  getDashboardData: vi.fn(),
 }))
 
 describe('useNetflowData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Setup default mock returns
-    vi.mocked(motherduck.loadParquetData).mockResolvedValue(1000)
-    vi.mocked(motherduck.getTimelineData).mockResolvedValue([])
-    vi.mocked(motherduck.getAttackDistribution).mockResolvedValue([])
-    vi.mocked(motherduck.getTopTalkers).mockResolvedValue([])
-    vi.mocked(motherduck.getFlows).mockResolvedValue([])
-    vi.mocked(motherduck.getFlowCount).mockResolvedValue(1000)
+    vi.mocked(apiClient.loadDataFromUrl).mockResolvedValue({
+      success: true,
+      rowCount: 1000,
+    })
+    vi.mocked(apiClient.getDashboardData).mockResolvedValue({
+      timeline: [],
+      attacks: [],
+      topSrcIPs: [],
+      topDstIPs: [],
+      flows: [],
+      totalCount: 1000,
+    })
   })
 
   it('returns loading state when URL provided', async () => {
@@ -38,11 +40,11 @@ describe('useNetflowData', () => {
     expect(result.current.loading).toBe(false)
   })
 
-  it('loads data via MotherDuck on mount', async () => {
+  it('loads data via server-side API on mount', async () => {
     renderHook(() => useNetflowData('/data/test.parquet'))
 
     await waitFor(() => {
-      expect(motherduck.loadParquetData).toHaveBeenCalledWith(
+      expect(apiClient.loadDataFromUrl).toHaveBeenCalledWith(
         '/data/test.parquet',
         expect.objectContaining({
           onProgress: expect.any(Function),
@@ -59,15 +61,11 @@ describe('useNetflowData', () => {
       expect(result.current.loading).toBe(false)
     })
 
-    expect(motherduck.getTimelineData).toHaveBeenCalled()
-    expect(motherduck.getAttackDistribution).toHaveBeenCalled()
-    expect(motherduck.getTopTalkers).toHaveBeenCalled()
-    expect(motherduck.getFlows).toHaveBeenCalled()
-    expect(motherduck.getFlowCount).toHaveBeenCalled()
+    expect(apiClient.getDashboardData).toHaveBeenCalled()
   })
 
   it('sets error state on load failure', async () => {
-    vi.mocked(motherduck.loadParquetData).mockRejectedValue(new Error('Failed to load'))
+    vi.mocked(apiClient.loadDataFromUrl).mockRejectedValue(new Error('Failed to load'))
 
     const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
 
@@ -77,7 +75,10 @@ describe('useNetflowData', () => {
   })
 
   it('returns total row count', async () => {
-    vi.mocked(motherduck.loadParquetData).mockResolvedValue(2500000)
+    vi.mocked(apiClient.loadDataFromUrl).mockResolvedValue({
+      success: true,
+      rowCount: 2500000,
+    })
 
     const { result } = renderHook(() => useNetflowData('/data/test.parquet'))
 
@@ -95,15 +96,18 @@ describe('useNetflowData', () => {
 
     vi.clearAllMocks()
     // Re-setup mocks after clear
-    vi.mocked(motherduck.getTimelineData).mockResolvedValue([])
-    vi.mocked(motherduck.getAttackDistribution).mockResolvedValue([])
-    vi.mocked(motherduck.getTopTalkers).mockResolvedValue([])
-    vi.mocked(motherduck.getFlows).mockResolvedValue([])
-    vi.mocked(motherduck.getFlowCount).mockResolvedValue(1000)
+    vi.mocked(apiClient.getDashboardData).mockResolvedValue({
+      timeline: [],
+      attacks: [],
+      topSrcIPs: [],
+      topDstIPs: [],
+      flows: [],
+      totalCount: 1000,
+    })
 
     await result.current.refresh()
 
-    expect(motherduck.getTimelineData).toHaveBeenCalled()
+    expect(apiClient.getDashboardData).toHaveBeenCalled()
   })
 
   it('refresh accepts filter clause', async () => {
@@ -115,15 +119,22 @@ describe('useNetflowData', () => {
 
     vi.clearAllMocks()
     // Re-setup mocks after clear
-    vi.mocked(motherduck.getTimelineData).mockResolvedValue([])
-    vi.mocked(motherduck.getAttackDistribution).mockResolvedValue([])
-    vi.mocked(motherduck.getTopTalkers).mockResolvedValue([])
-    vi.mocked(motherduck.getFlows).mockResolvedValue([])
-    vi.mocked(motherduck.getFlowCount).mockResolvedValue(1000)
+    vi.mocked(apiClient.getDashboardData).mockResolvedValue({
+      timeline: [],
+      attacks: [],
+      topSrcIPs: [],
+      topDstIPs: [],
+      flows: [],
+      totalCount: 1000,
+    })
 
     await result.current.refresh("Attack = 'Exploits'")
 
-    expect(motherduck.getTimelineData).toHaveBeenCalledWith(60, "Attack = 'Exploits'")
+    expect(apiClient.getDashboardData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        whereClause: "Attack = 'Exploits'",
+      })
+    )
   })
 
   describe('progress tracking', () => {

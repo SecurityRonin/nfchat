@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@duckdb/duckdb-wasm": "^1.33.1-dev16.0",
+    "@duckdb/node-api": "^1.4.3-r.3",
     "@motherduck/wasm-client": "^0.8.1",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-scroll-area": "^1.2.10",

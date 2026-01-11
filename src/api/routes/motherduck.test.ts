@@ -6,27 +6,24 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-// Create a mock evaluateQuery that returns different results based on query
-const mockEvaluateQuery = vi.fn().mockImplementation((sql: string) => {
-  // Default response for COUNT queries
-  if (sql.includes('COUNT(*)')) {
-    return Promise.resolve({
-      data: { toRows: () => [{ cnt: 100, count: 100 }] },
-    })
-  }
-  // Default response for other queries
-  return Promise.resolve({
-    data: { toRows: () => [{ count: 100 }] },
-  })
+// Mock result for runAndReadAll
+const mockGetRowObjects = vi.fn().mockReturnValue([{ cnt: 100, count: 100 }])
+const mockRunAndReadAll = vi.fn().mockResolvedValue({
+  getRowObjects: mockGetRowObjects,
+})
+const mockRun = vi.fn().mockResolvedValue(undefined)
+const mockConnect = vi.fn().mockResolvedValue({
+  runAndReadAll: mockRunAndReadAll,
+  run: mockRun,
+})
+const mockCreate = vi.fn().mockResolvedValue({
+  connect: mockConnect,
 })
 
-// Mock the MotherDuck WASM client (not available in Node)
-vi.mock('@motherduck/wasm-client', () => ({
-  MDConnection: {
-    create: vi.fn().mockReturnValue({
-      isInitialized: vi.fn().mockResolvedValue(true),
-      evaluateQuery: mockEvaluateQuery,
-    }),
+// Mock the DuckDB Node API
+vi.mock('@duckdb/node-api', () => ({
+  DuckDBInstance: {
+    create: mockCreate,
   },
 }))
 
@@ -37,16 +34,18 @@ describe('MotherDuck API Routes', () => {
     vi.resetModules()
     // Set up mock token in env
     process.env.MOTHERDUCK_TOKEN = 'test-token'
-    // Reset the mock to default behavior
-    mockEvaluateQuery.mockImplementation((sql: string) => {
-      if (sql.includes('COUNT(*)')) {
-        return Promise.resolve({
-          data: { toRows: () => [{ cnt: 100, count: 100 }] },
-        })
-      }
-      return Promise.resolve({
-        data: { toRows: () => [{ count: 100 }] },
-      })
+    // Reset the mocks to default behavior
+    mockGetRowObjects.mockReturnValue([{ cnt: 100, count: 100 }])
+    mockRunAndReadAll.mockResolvedValue({
+      getRowObjects: mockGetRowObjects,
+    })
+    mockRun.mockResolvedValue(undefined)
+    mockConnect.mockResolvedValue({
+      runAndReadAll: mockRunAndReadAll,
+      run: mockRun,
+    })
+    mockCreate.mockResolvedValue({
+      connect: mockConnect,
     })
   })
 
@@ -91,7 +90,7 @@ describe('MotherDuck API Routes', () => {
 
     it('handles query execution errors', async () => {
       // Make the mock reject for this test
-      mockEvaluateQuery.mockRejectedValueOnce(new Error('Query failed'))
+      mockRunAndReadAll.mockRejectedValueOnce(new Error('Query failed'))
 
       const { handleQuery } = await import('./motherduck')
 

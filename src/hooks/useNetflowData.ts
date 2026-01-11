@@ -1,12 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  loadParquetData,
-  getTimelineData,
-  getAttackDistribution,
-  getTopTalkers,
-  getFlows,
-  getFlowCount,
-} from '@/lib/motherduck'
+import { loadDataFromUrl, getDashboardData } from '@/lib/api-client'
 import { useStore } from '@/lib/store'
 import type { ProgressEvent, LogEntry } from '@/lib/progress'
 
@@ -57,31 +50,29 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
       })
       addLog({
         level: 'info',
-        message: 'Querying MotherDuck for dashboard data',
+        message: 'Fetching dashboard data from server',
         timestamp: Date.now(),
       })
 
-      // Fetch all dashboard data in parallel from browser-side MotherDuck
-      const [timeline, attacks, srcIPs, dstIPs, flows, flowCount] = await Promise.all([
-        getTimelineData(60, whereClause),
-        getAttackDistribution(),
-        getTopTalkers('src', 'flows', 10, whereClause),
-        getTopTalkers('dst', 'flows', 10, whereClause),
-        getFlows(whereClause, 1000, 0),
-        getFlowCount(whereClause),
-      ])
+      // Fetch all dashboard data from server-side MotherDuck
+      const data = await getDashboardData({
+        bucketMinutes: 60,
+        whereClause,
+        limit: 1000,
+        offset: 0,
+      })
 
       // Update store with all data
-      setTimelineData(timeline)
-      setAttackBreakdown(attacks)
-      setTopSrcIPs(srcIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
-      setTopDstIPs(dstIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
-      setFlows(flows)
-      setTotalFlowCount(flowCount)
+      setTimelineData(data.timeline)
+      setAttackBreakdown(data.attacks)
+      setTopSrcIPs(data.topSrcIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
+      setTopDstIPs(data.topDstIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
+      setFlows(data.flows)
+      setTotalFlowCount(data.totalCount)
 
       addLog({
         level: 'info',
-        message: `Dashboard loaded: ${flowCount.toLocaleString()} flows`,
+        message: `Dashboard loaded: ${data.totalCount.toLocaleString()} flows`,
         timestamp: Date.now(),
       })
     } catch (err) {
@@ -103,12 +94,12 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
         setError(null)
         setLogs([])
 
-        // Load parquet via browser-side MotherDuck WASM client
-        const rowCount = await loadParquetData(parquetUrl, {
+        // Load parquet via server-side API
+        const result = await loadDataFromUrl(parquetUrl, {
           onProgress: setProgress,
           onLog: addLog,
         })
-        setTotalRows(rowCount)
+        setTotalRows(result.rowCount ?? 0)
 
         // Fetch all dashboard data
         await fetchDashboardData('1=1')
@@ -117,12 +108,12 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
         setProgress({
           stage: 'complete',
           percent: 100,
-          message: `Ready - ${rowCount.toLocaleString()} flows loaded`,
+          message: `Ready - ${(result.rowCount ?? 0).toLocaleString()} flows loaded`,
           timestamp: Date.now(),
         })
         addLog({
           level: 'info',
-          message: `Dashboard ready with ${rowCount.toLocaleString()} flows`,
+          message: `Dashboard ready with ${(result.rowCount ?? 0).toLocaleString()} flows`,
           timestamp: Date.now(),
         })
         setDataLoaded(true)

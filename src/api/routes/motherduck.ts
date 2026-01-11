@@ -1,14 +1,15 @@
 /**
  * MotherDuck API Route Handlers
  *
- * Server-side handlers for MotherDuck operations.
+ * Server-side handlers for MotherDuck operations using native Node.js SDK.
  * Token is stored in MOTHERDUCK_TOKEN environment variable.
  */
 
-import { MDConnection } from '@motherduck/wasm-client'
+import { DuckDBInstance, DuckDBConnection } from '@duckdb/node-api'
 
-// Singleton connection
-let connection: MDConnection | null = null
+// Singleton instance and connection
+let instance: DuckDBInstance | null = null
+let connection: DuckDBConnection | null = null
 
 /**
  * Get MotherDuck token from environment.
@@ -20,7 +21,7 @@ function getToken(): string | null {
 /**
  * Initialize or get existing MotherDuck connection.
  */
-async function getConnection(): Promise<MDConnection> {
+async function getConnection(): Promise<DuckDBConnection> {
   if (connection) return connection
 
   const token = getToken()
@@ -28,9 +29,26 @@ async function getConnection(): Promise<MDConnection> {
     throw new Error('MotherDuck token not configured on server')
   }
 
-  connection = MDConnection.create({ mdToken: token })
-  await connection.isInitialized()
+  console.log('[MotherDuck] Creating server-side connection...')
+
+  // Create DuckDB instance with MotherDuck connection
+  instance = await DuckDBInstance.create('md:', {
+    motherduck_token: token,
+  })
+
+  connection = await instance.connect()
+  console.log('[MotherDuck] Server-side connection initialized')
+
   return connection
+}
+
+/**
+ * Execute a query and return row objects.
+ */
+async function executeQuery<T>(sql: string): Promise<T[]> {
+  const conn = await getConnection()
+  const result = await conn.runAndReadAll(sql)
+  return result.getRowObjects() as T[]
 }
 
 /**
@@ -118,10 +136,8 @@ export async function handleQuery(req: QueryRequest): Promise<QueryResponse> {
   }
 
   try {
-    const conn = await getConnection()
-    const result = await conn.evaluateQuery(sql)
-    const rows = result.data.toRows() as Record<string, unknown>[]
-    return { success: true, data: convertBigInts(rows) }
+    const data = await executeQuery<Record<string, unknown>>(sql)
+    return { success: true, data: convertBigInts(data) }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Query execution failed'
     return { success: false, error: message }
@@ -162,22 +178,28 @@ export async function handleLoadFromUrl(
   try {
     const conn = await getConnection()
 
+    console.log(`[MotherDuck] Loading parquet from ${url}`)
+
     // Create table from parquet URL
-    await conn.evaluateQuery(`
+    await conn.run(`
       CREATE OR REPLACE TABLE ${tableName} AS
       SELECT * FROM read_parquet('${url}')
     `)
 
+    console.log('[MotherDuck] Table created successfully')
+
     // Get row count
-    const countResult = await conn.evaluateQuery(
+    const countResult = await executeQuery<{ cnt: number | bigint }>(
       `SELECT COUNT(*) as cnt FROM ${tableName}`
     )
-    const rows = countResult.data.toRows() as { cnt: number | bigint }[]
-    const rowCount = Number(rows[0].cnt)
+    const rowCount = Number(countResult[0].cnt)
+
+    console.log(`[MotherDuck] Loaded ${rowCount.toLocaleString()} rows`)
 
     return { success: true, rowCount }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load data'
+    console.error('[MotherDuck] Load error:', message)
     return { success: false, error: message }
   }
 }
@@ -202,81 +224,76 @@ export async function handleGetDashboardData(
   }
 
   try {
-    const conn = await getConnection()
     const bucketMs = bucketMinutes * 60 * 1000
 
     // Execute all queries in parallel
-    const [
-      timelineResult,
-      attacksResult,
-      srcIPsResult,
-      dstIPsResult,
-      flowsResult,
-      countResult,
-    ] = await Promise.all([
-      // Timeline data
-      conn.evaluateQuery(`
-        SELECT
-          (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
-          Attack as attack,
-          COUNT(*) as count
-        FROM flows
-        WHERE ${whereClause}
-        GROUP BY time, attack
-        ORDER BY time, attack
-      `),
-      // Attack distribution
-      conn.evaluateQuery(`
-        SELECT Attack as attack, COUNT(*) as count
-        FROM flows
-        GROUP BY Attack
-        ORDER BY count DESC
-      `),
-      // Top source IPs
-      conn.evaluateQuery(`
-        SELECT IPV4_SRC_ADDR as ip, COUNT(*) as value
-        FROM flows
-        WHERE ${whereClause}
-        GROUP BY IPV4_SRC_ADDR
-        ORDER BY value DESC
-        LIMIT 10
-      `),
-      // Top destination IPs
-      conn.evaluateQuery(`
-        SELECT IPV4_DST_ADDR as ip, COUNT(*) as value
-        FROM flows
-        WHERE ${whereClause}
-        GROUP BY IPV4_DST_ADDR
-        ORDER BY value DESC
-        LIMIT 10
-      `),
-      // Flow records
-      conn.evaluateQuery(`
-        SELECT *
-        FROM flows
-        WHERE ${whereClause}
-        ORDER BY FLOW_START_MILLISECONDS DESC
-        LIMIT ${limit}
-        OFFSET ${offset}
-      `),
-      // Total count
-      conn.evaluateQuery(`
-        SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}
-      `),
-    ])
+    const [timeline, attacks, topSrcIPs, topDstIPs, flows, countResult] =
+      await Promise.all([
+        // Timeline data
+        executeQuery<{ time: number; attack: string; count: number }>(`
+          SELECT
+            (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
+            Attack as attack,
+            COUNT(*) as count
+          FROM flows
+          WHERE ${whereClause}
+          GROUP BY time, attack
+          ORDER BY time, attack
+        `),
+        // Attack distribution
+        executeQuery<{ attack: string; count: number }>(`
+          SELECT Attack as attack, COUNT(*) as count
+          FROM flows
+          GROUP BY Attack
+          ORDER BY count DESC
+        `),
+        // Top source IPs
+        executeQuery<{ ip: string; value: number }>(`
+          SELECT IPV4_SRC_ADDR as ip, COUNT(*) as value
+          FROM flows
+          WHERE ${whereClause}
+          GROUP BY IPV4_SRC_ADDR
+          ORDER BY value DESC
+          LIMIT 10
+        `),
+        // Top destination IPs
+        executeQuery<{ ip: string; value: number }>(`
+          SELECT IPV4_DST_ADDR as ip, COUNT(*) as value
+          FROM flows
+          WHERE ${whereClause}
+          GROUP BY IPV4_DST_ADDR
+          ORDER BY value DESC
+          LIMIT 10
+        `),
+        // Flow records
+        executeQuery<Record<string, unknown>>(`
+          SELECT *
+          FROM flows
+          WHERE ${whereClause}
+          ORDER BY FLOW_START_MILLISECONDS DESC
+          LIMIT ${limit}
+          OFFSET ${offset}
+        `),
+        // Total count
+        executeQuery<{ cnt: number | bigint }>(`
+          SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}
+        `),
+      ])
 
     const data: DashboardData = {
-      timeline: convertBigInts(timelineResult.data.toRows() as DashboardData['timeline']),
-      attacks: convertBigInts(attacksResult.data.toRows() as DashboardData['attacks']),
-      topSrcIPs: convertBigInts(srcIPsResult.data.toRows() as DashboardData['topSrcIPs']),
-      topDstIPs: convertBigInts(dstIPsResult.data.toRows() as DashboardData['topDstIPs']),
-      flows: convertBigInts(flowsResult.data.toRows() as DashboardData['flows']),
-      totalCount: Number((countResult.data.toRows() as { cnt: number | bigint }[])[0].cnt),
+      timeline: convertBigInts(timeline),
+      attacks: convertBigInts(attacks),
+      topSrcIPs: convertBigInts(topSrcIPs),
+      topDstIPs: convertBigInts(topDstIPs),
+      flows: convertBigInts(flows),
+      totalCount: Number(countResult[0].cnt),
     }
 
     return { success: true, data }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to get dashboard data'
+    const message =
+      err instanceof Error ? err.message : 'Failed to get dashboard data'
+    console.error('[MotherDuck] Dashboard error:', message)
     return { success: false, error: message }
   }
 }
@@ -286,4 +303,5 @@ export async function handleGetDashboardData(
  */
 export function resetConnection(): void {
   connection = null
+  instance = null
 }
