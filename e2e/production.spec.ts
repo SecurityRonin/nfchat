@@ -37,8 +37,8 @@ test.describe('Production Smoke Test', () => {
       throw new Error(`Page shows error: ${errorText}`)
     }
 
-    // Wait for dashboard (real MotherDuck - may take a while)
-    await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 120000 })
+    // Wait for dashboard (real MotherDuck - may take a while with retries)
+    await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 300000 })
     console.log('✓ Dashboard loaded!')
 
     await page.screenshot({ path: 'test-results/dashboard.png', fullPage: true })

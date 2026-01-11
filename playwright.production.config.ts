@@ -10,7 +10,7 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: 'line',
-  timeout: 180 * 1000, // 3 minutes for real API calls
+  timeout: 360 * 1000, // 6 minutes for real API calls with retries
   use: {
     baseURL: 'https://nfchat.vercel.app',
     trace: 'on-first-retry',
