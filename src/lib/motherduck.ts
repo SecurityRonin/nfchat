@@ -482,7 +482,7 @@ export async function loadParquetData(
                           lastError.message.includes('connection')
 
       onLog?.({
-        level: 'warning',
+        level: 'warn',
         message: `Attempt ${attempt} failed: ${lastError.message}`,
         timestamp: Date.now(),
       })
