@@ -26,8 +26,23 @@ export async function initMotherDuck(): Promise<MDConnection> {
     )
   }
 
+  console.log('[MotherDuck] Creating connection...')
   connection = MDConnection.create({ mdToken: token })
-  await connection.isInitialized()
+
+  // Add timeout for initialization
+  const timeoutMs = 30000
+  const initPromise = connection.isInitialized()
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`MotherDuck connection timeout after ${timeoutMs}ms`)), timeoutMs)
+  })
+
+  try {
+    await Promise.race([initPromise, timeoutPromise])
+    console.log('[MotherDuck] Connection initialized successfully')
+  } catch (err) {
+    connection = null
+    throw err
+  }
 
   return connection
 }

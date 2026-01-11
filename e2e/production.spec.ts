@@ -6,17 +6,9 @@ import { test, expect } from '@playwright/test'
  */
 test.describe('Production Smoke Test', () => {
   test('loads demo data from real API', async ({ page }) => {
-    // Capture console errors
-    const errors: string[] = []
+    // Capture all console messages
     page.on('console', (msg) => {
-      if (msg.type() === 'error') errors.push(msg.text())
-    })
-
-    // Capture network failures
-    page.on('response', (response) => {
-      if (!response.ok()) {
-        console.log(`API Error: ${response.url()} - ${response.status()}`)
-      }
+      console.log(`[${msg.type()}] ${msg.text()}`)
     })
 
     // Go to production
@@ -24,31 +16,31 @@ test.describe('Production Smoke Test', () => {
 
     // Verify landing page
     await expect(page.getByText('nfchat')).toBeVisible({ timeout: 10000 })
+    console.log('✓ Landing page loaded')
 
-    // Click Load Demo Dataset (real API call)
+    // Take screenshot before clicking
+    await page.screenshot({ path: 'test-results/before-load.png', fullPage: true })
+
+    // Click Load Demo Dataset
     await page.getByRole('button', { name: /load demo/i }).click()
+    console.log('✓ Clicked Load Demo Dataset')
 
-    // Should show progress
-    await expect(page.getByRole('progressbar')).toBeVisible({ timeout: 5000 })
+    // Wait a bit and take screenshot
+    await page.waitForTimeout(5000)
+    await page.screenshot({ path: 'test-results/after-5s.png', fullPage: true })
 
-    // Wait a bit then check for errors
-    await page.waitForTimeout(10000)
-
-    // Check if there's an error on the page
-    const errorText = await page.locator('text=/error|failed/i').first().textContent().catch(() => null)
-    if (errorText) {
-      console.log('Page error:', errorText)
+    // Check for error message
+    const errorVisible = await page.locator('[class*="destructive"]').isVisible().catch(() => false)
+    if (errorVisible) {
+      const errorText = await page.locator('[class*="destructive"]').textContent()
+      console.log('Error on page:', errorText)
+      throw new Error(`Page shows error: ${errorText}`)
     }
 
-    // Log console errors
-    if (errors.length > 0) {
-      console.log('Console errors:', errors)
-    }
-
-    // Take screenshot
-    await page.screenshot({ path: 'test-results/production-state.png', fullPage: true })
-
-    // Wait for dashboard (real MotherDuck query - may take up to 2 minutes)
+    // Wait for dashboard (real MotherDuck - may take a while)
     await expect(page.getByTestId('dashboard')).toBeVisible({ timeout: 120000 })
+    console.log('✓ Dashboard loaded!')
+
+    await page.screenshot({ path: 'test-results/dashboard.png', fullPage: true })
   })
 })
