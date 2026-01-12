@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       diagnostics.connectionStringFormat = 'md:?motherduck_token=<token>'
 
       await new Promise<void>((resolve, reject) => {
-        const mdDb = new duckdb.default.Database(connectionString, (err: Error | null) => {
+        const mdDb = new duckdb.default.Database(connectionString, { home_directory: '/tmp' }, (err: Error | null) => {
           if (err) {
             diagnostics.motherDuckError = err.message
             reject(err)

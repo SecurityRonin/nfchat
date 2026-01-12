@@ -36,9 +36,11 @@ export async function initMotherDuck(): Promise<duckdb.Database> {
 
   return new Promise((resolve, reject) => {
     // Token must be in connection string, not as config option
+    // Set home_directory=/tmp for serverless environments (Lambda/Vercel have no home dir)
     const connectionString = `md:?motherduck_token=${token}`
 
-    db = new duckdb.Database(connectionString, (err) => {
+    // Connect to MotherDuck with home_directory config for serverless
+    db = new duckdb.Database(connectionString, { home_directory: '/tmp' }, (err: Error | null) => {
       if (err) {
         console.error('[MotherDuck] Connection failed:', err.message)
         db = null
