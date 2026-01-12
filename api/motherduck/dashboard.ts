@@ -97,9 +97,10 @@ async function getTimelineData(
 ): Promise<{ time: number; attack: string; count: number }[]> {
   const bucketMs = bucketMinutes * 60 * 1000
 
+  // Use FLOOR to ensure integer division for proper bucketing
   return executeQuery(`
     SELECT
-      (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
+      CAST(FLOOR(FLOW_START_MILLISECONDS / ${bucketMs}) AS BIGINT) * ${bucketMs} as time,
       Attack as attack,
       COUNT(*) as count
     FROM flows
