@@ -4,9 +4,27 @@
  * Load parquet data from a URL into MotherDuck.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { loadParquetData } from '../lib/motherduck-server'
+
+// Ensure HOME is set before any duckdb imports
+if (!process.env.HOME) {
+  process.env.HOME = '/tmp'
+}
+
+// Dynamic import to ensure HOME is set first
+let loadParquetData: (url: string) => Promise<number>
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Load module dynamically on first request
+  if (!loadParquetData) {
+    try {
+      const module = await import('../lib/motherduck-server')
+      loadParquetData = module.loadParquetData
+    } catch (importError) {
+      const message = importError instanceof Error ? importError.message : String(importError)
+      console.error('[API] Failed to import motherduck-server:', message)
+      return res.status(500).json({ success: false, error: `Module import failed: ${message}` })
+    }
+  }
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
