@@ -4,7 +4,7 @@
  * Load parquet data from a URL into MotherDuck.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { loadParquetData } from './_shared'
+import { loadParquetData } from './shared'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST

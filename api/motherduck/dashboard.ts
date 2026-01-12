@@ -11,7 +11,7 @@ import {
   getFlows,
   getFlowCount,
   convertBigInts,
-} from './_shared'
+} from './shared'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST

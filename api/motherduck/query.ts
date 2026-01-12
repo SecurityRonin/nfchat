@@ -4,7 +4,7 @@
  * Execute a SQL query on MotherDuck.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { executeQuery, convertBigInts } from './_shared'
+import { executeQuery, convertBigInts } from './shared'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
