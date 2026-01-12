@@ -2,16 +2,134 @@
  * Vercel API Route: POST /api/motherduck/dashboard
  *
  * Get all dashboard data in a single call.
+ * Note: DuckDB code is inlined because Vercel doesn't properly trace
+ * imports from shared modules in the api/ directory.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import {
-  getTimelineData,
-  getAttackDistribution,
-  getTopTalkers,
-  getFlows,
-  getFlowCount,
-  convertBigInts,
-} from './shared'
+
+// Set HOME before importing DuckDB - required for serverless environments
+if (!process.env.HOME) {
+  process.env.HOME = '/tmp'
+}
+
+// @ts-expect-error - duckdb-lambda-x86 has same API as duckdb but no types
+import duckdb from 'duckdb-lambda-x86'
+
+// Singleton database
+let db: ReturnType<typeof duckdb.Database> | null = null
+
+async function getConnection(): Promise<ReturnType<typeof duckdb.Database>> {
+  if (db) return db
+
+  const token = process.env.MOTHERDUCK_TOKEN
+  if (!token) {
+    throw new Error('MOTHERDUCK_TOKEN not set')
+  }
+
+  return new Promise((resolve, reject) => {
+    const connectionString = `md:?motherduck_token=${token}`
+    db = new duckdb.Database(connectionString, (err: Error | null) => {
+      if (err) {
+        db = null
+        reject(err)
+      } else {
+        resolve(db!)
+      }
+    })
+  })
+}
+
+async function executeQuery<T>(sql: string): Promise<T[]> {
+  const database = await getConnection()
+  return new Promise((resolve, reject) => {
+    database.all(sql, (err: Error | null, rows: T[]) => {
+      if (err) reject(err)
+      else resolve(rows || [])
+    })
+  })
+}
+
+function convertBigInts<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj === 'bigint') return Number(obj) as T
+  if (Array.isArray(obj)) return obj.map(convertBigInts) as T
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = convertBigInts(value)
+    }
+    return result as T
+  }
+  return obj
+}
+
+async function getAttackDistribution(): Promise<{ attack: string; count: number }[]> {
+  return executeQuery(`
+    SELECT Attack as attack, COUNT(*) as count
+    FROM flows
+    GROUP BY Attack
+    ORDER BY count DESC
+  `)
+}
+
+async function getTopTalkers(
+  direction: 'src' | 'dst',
+  metric: 'bytes' | 'flows',
+  limit: number = 10,
+  whereClause: string = '1=1'
+): Promise<{ ip: string; value: number }[]> {
+  const ipCol = direction === 'src' ? 'IPV4_SRC_ADDR' : 'IPV4_DST_ADDR'
+  const valueExpr = metric === 'bytes' ? 'SUM(IN_BYTES + OUT_BYTES)' : 'COUNT(*)'
+
+  return executeQuery(`
+    SELECT ${ipCol} as ip, ${valueExpr} as value
+    FROM flows
+    WHERE ${whereClause}
+    GROUP BY ${ipCol}
+    ORDER BY value DESC
+    LIMIT ${limit}
+  `)
+}
+
+async function getTimelineData(
+  bucketMinutes: number = 60,
+  whereClause: string = '1=1'
+): Promise<{ time: number; attack: string; count: number }[]> {
+  const bucketMs = bucketMinutes * 60 * 1000
+
+  return executeQuery(`
+    SELECT
+      (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
+      Attack as attack,
+      COUNT(*) as count
+    FROM flows
+    WHERE ${whereClause}
+    GROUP BY time, attack
+    ORDER BY time, attack
+  `)
+}
+
+async function getFlows(
+  whereClause: string = '1=1',
+  limit: number = 1000,
+  offset: number = 0
+): Promise<Record<string, unknown>[]> {
+  return executeQuery(`
+    SELECT *
+    FROM flows
+    WHERE ${whereClause}
+    ORDER BY FLOW_START_MILLISECONDS DESC
+    LIMIT ${limit}
+    OFFSET ${offset}
+  `)
+}
+
+async function getFlowCount(whereClause: string = '1=1'): Promise<number> {
+  const result = await executeQuery<{ cnt: number }>(`
+    SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}
+  `)
+  return Number(result[0].cnt)
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
