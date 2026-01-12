@@ -35,3 +35,6 @@ test-results/
 .env*.local
 .playwright-mcp/
 .wrangler/
+
+# Vercel temp files
+.env.vercel.tmp

@@ -4,7 +4,30 @@
  * Get all dashboard data in a single call.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handleGetDashboardData } from '../../src/api/routes/motherduck'
+import {
+  getTimelineData,
+  getAttackDistribution,
+  getTopTalkers,
+  getFlows,
+  getFlowCount,
+} from '../lib/motherduck-server'
+
+/**
+ * Convert BigInt values to Numbers for JSON serialization.
+ */
+function convertBigInts<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj === 'bigint') return Number(obj) as T
+  if (Array.isArray(obj)) return obj.map(convertBigInts) as T
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = convertBigInts(value)
+    }
+    return result as T
+  }
+  return obj
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST
@@ -13,25 +36,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { bucketMinutes, whereClause, limit, offset } = req.body || {}
+    const {
+      bucketMinutes = 60,
+      whereClause = '1=1',
+      limit = 1000,
+      offset = 0,
+    } = req.body || {}
 
-    const result = await handleGetDashboardData({
-      bucketMinutes: bucketMinutes || 60,
-      whereClause: whereClause || '1=1',
-      limit: limit || 1000,
-      offset: offset || 0,
-    })
+    // Execute all queries in parallel
+    const [timeline, attacks, topSrcIPs, topDstIPs, flows, totalCount] =
+      await Promise.all([
+        getTimelineData(bucketMinutes, whereClause),
+        getAttackDistribution(),
+        getTopTalkers('src', 'flows', 10, whereClause),
+        getTopTalkers('dst', 'flows', 10, whereClause),
+        getFlows(whereClause, limit, offset),
+        getFlowCount(whereClause),
+      ])
 
-    if (!result.success) {
-      return res.status(400).json(result)
+    const data = {
+      timeline: convertBigInts(timeline),
+      attacks: convertBigInts(attacks),
+      topSrcIPs: convertBigInts(topSrcIPs),
+      topDstIPs: convertBigInts(topDstIPs),
+      flows: convertBigInts(flows),
+      totalCount: Number(totalCount),
     }
 
-    return res.status(200).json(result)
+    return res.status(200).json({ success: true, data })
   } catch (error) {
-    console.error('MotherDuck dashboard error:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error('MotherDuck dashboard error:', errorMessage)
     return res.status(500).json({
       success: false,
-      error: 'Internal server error',
+      error: errorMessage,
     })
   }
 }
