@@ -104,7 +104,7 @@ export function TimelineChart({
 
   return (
     <div data-testid="timeline-chart" className="h-full w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <AreaChart
           data={stackedData}
           margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
