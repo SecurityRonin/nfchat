@@ -55,10 +55,11 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
       })
 
       // Fetch all dashboard data from server-side MotherDuck
+      // Start with 100 flows for fast initial load, user can load more
       const data = await getDashboardData({
         bucketMinutes: 60,
         whereClause,
-        limit: 1000,
+        limit: 100,
         offset: 0,
       })
 

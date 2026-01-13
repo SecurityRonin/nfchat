@@ -229,15 +229,29 @@ export async function handleGetDashboardData(
     // Execute all queries in parallel
     const [timeline, attacks, topSrcIPs, topDstIPs, flows, countResult] =
       await Promise.all([
-        // Timeline data
+        // Timeline data - limit to reasonable number of buckets
+        // With 10 attack types and 100 time buckets = 1000 max rows
         executeQuery<{ time: number; attack: string; count: number }>(`
-          SELECT
-            (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
-            Attack as attack,
-            COUNT(*) as count
-          FROM flows
-          WHERE ${whereClause}
-          GROUP BY time, attack
+          WITH time_range AS (
+            SELECT
+              MIN(FLOW_START_MILLISECONDS) as min_time,
+              MAX(FLOW_START_MILLISECONDS) as max_time
+            FROM flows
+            WHERE ${whereClause}
+          ),
+          limited_timeline AS (
+            SELECT
+              (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
+              Attack as attack,
+              COUNT(*) as count
+            FROM flows
+            WHERE ${whereClause}
+            GROUP BY time, attack
+            ORDER BY time, attack
+          )
+          SELECT time, attack, count
+          FROM limited_timeline
+          WHERE time >= (SELECT max_time - (100 * ${bucketMs}) FROM time_range)
           ORDER BY time, attack
         `),
         // Attack distribution
