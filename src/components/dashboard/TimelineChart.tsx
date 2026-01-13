@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import {
   AreaChart,
   Area,
@@ -55,6 +55,25 @@ export function TimelineChart({
   showLegend = false,
   onBrushChange,
 }: TimelineProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerReady, setContainerReady] = useState(false)
+
+  // Wait for container to have dimensions before rendering chart
+  useEffect(() => {
+    const checkDimensions = () => {
+      if (containerRef.current) {
+        const { offsetWidth, offsetHeight } = containerRef.current
+        if (offsetWidth > 0 && offsetHeight > 0) {
+          setContainerReady(true)
+        }
+      }
+    }
+
+    // Small delay to ensure layout is complete after mount
+    const timer = setTimeout(checkDimensions, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
   const stackedData = useMemo(() => transformToStacked(data), [data])
 
   const attackTypesInData = useMemo(() => {
@@ -103,8 +122,9 @@ export function TimelineChart({
   }
 
   return (
-    <div data-testid="timeline-chart" className="h-full w-full">
-      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+    <div ref={containerRef} data-testid="timeline-chart" className="h-full w-full">
+      {containerReady && (
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <AreaChart
           data={stackedData}
           margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
@@ -151,6 +171,7 @@ export function TimelineChart({
           )}
         </AreaChart>
       </ResponsiveContainer>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo, useCallback, useState, useLayoutEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { PREMIERE_COLORS, TIMELINE_CONFIG } from './constants'
 import { pixelToTime, timeToPercent } from './utils'
@@ -46,6 +46,33 @@ export function ProTimeline({
   const trackRef = useRef<HTMLDivElement>(null)
   const animationRef = useRef<number | undefined>(undefined)
   const lastTickRef = useRef<number>(0)
+  const [containerReady, setContainerReady] = useState(false)
+
+  // Wait for container to have dimensions before rendering chart
+  useLayoutEffect(() => {
+    if (trackRef.current) {
+      const { offsetWidth, offsetHeight } = trackRef.current
+      if (offsetWidth > 0 && offsetHeight > 0) {
+        setContainerReady(true)
+      }
+    }
+  }, [])
+
+  // Also check on resize
+  useEffect(() => {
+    const checkDimensions = () => {
+      if (trackRef.current) {
+        const { offsetWidth, offsetHeight } = trackRef.current
+        if (offsetWidth > 0 && offsetHeight > 0) {
+          setContainerReady(true)
+        }
+      }
+    }
+
+    // Small delay to ensure layout is complete after mount
+    const timer = setTimeout(checkDimensions, 0)
+    return () => clearTimeout(timer)
+  }, [])
 
   // Zustand store
   const playback = useStore((s) => s.playback)
@@ -224,8 +251,8 @@ export function ProTimeline({
         }}
         onClick={handleTrackClick}
       >
-        {/* Chart visualization */}
-        {chartData.length > 0 && (
+        {/* Chart visualization - only render when container has dimensions */}
+        {containerReady && chartData.length > 0 && (
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <AreaChart
               data={chartData}
