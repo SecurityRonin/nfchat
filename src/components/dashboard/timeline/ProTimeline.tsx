@@ -8,16 +8,7 @@ import { TimeRuler } from './TimeRuler'
 import { Playhead } from './Playhead'
 import { PlaybackControls } from './PlaybackControls'
 import type { ProTimelineProps } from './types'
-
-// Recharts for data visualization
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { LightweightAreaChart } from '../charts'
 
 interface TimelineDataPoint {
   time: number
@@ -45,51 +36,32 @@ function aggregateData(data: TimelineDataPoint[]): AggregatedDataPoint[] {
 
 /**
  * Memoized chart component that only re-renders when data changes.
- * This prevents expensive Recharts SVG re-renders during playback animation.
+ * Uses lightweight SVG chart - no Recharts overhead.
  */
 const TimelineChart = memo(function TimelineChart({
   chartData,
   containerReady,
+  width,
+  height,
 }: {
   chartData: AggregatedDataPoint[]
   containerReady: boolean
+  width: number
+  height: number
 }) {
-  if (!containerReady || chartData.length === 0) {
+  if (!containerReady || chartData.length === 0 || width <= 0 || height <= 0) {
     return null
   }
 
   return (
-    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-      <AreaChart
-        data={chartData}
-        margin={{ top: 5, right: 0, left: 0, bottom: 0 }}
-      >
-        <defs>
-          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={PREMIERE_COLORS.playhead} stopOpacity={0.3} />
-            <stop offset="100%" stopColor={PREMIERE_COLORS.playhead} stopOpacity={0.05} />
-          </linearGradient>
-        </defs>
-        <XAxis dataKey="time" hide />
-        <YAxis hide />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: PREMIERE_COLORS.panelBg,
-            border: `1px solid ${PREMIERE_COLORS.border}`,
-            borderRadius: 4,
-          }}
-          labelStyle={{ color: PREMIERE_COLORS.text }}
-        />
-        <Area
-          type="monotone"
-          dataKey="count"
-          stroke={PREMIERE_COLORS.playhead}
-          strokeWidth={1}
-          fill="url(#chartGradient)"
-          isAnimationActive={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <LightweightAreaChart
+      data={chartData}
+      width={width}
+      height={height}
+      fillColor={PREMIERE_COLORS.playhead}
+      strokeColor={PREMIERE_COLORS.playhead}
+      fillOpacity={0.3}
+    />
   )
 })
 
@@ -385,7 +357,12 @@ export function ProTimeline({
         onClick={handleTrackClick}
       >
         {/* Chart visualization - memoized, only re-renders when data changes */}
-        <TimelineChart chartData={chartData} containerReady={containerReady} />
+        <TimelineChart
+          chartData={chartData}
+          containerReady={containerReady}
+          width={trackWidth}
+          height={TIMELINE_CONFIG.trackHeight}
+        />
 
         {/* Playhead - uses its own store subscription for currentTime */}
         <PlayheadWrapper

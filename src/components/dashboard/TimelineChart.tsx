@@ -1,17 +1,8 @@
 import { useMemo } from 'react'
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  Brush,
-} from 'recharts'
 import { Loader2 } from 'lucide-react'
-import { ATTACK_COLORS, ATTACK_TYPES, type AttackType } from '@/lib/schema'
+import { ATTACK_TYPES } from '@/lib/schema'
 import { useContainerDimensions } from '@/hooks/useContainerDimensions'
+import { LightweightStackedAreaChart } from './charts'
 
 export interface TimelineData {
   time: number
@@ -45,19 +36,13 @@ function transformToStacked(data: TimelineData[]): StackedDataPoint[] {
   return Array.from(grouped.values()).sort((a, b) => a.time - b.time)
 }
 
-function formatTime(timestamp: number): string {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
 export function TimelineChart({
   data,
   loading = false,
   showLegend = false,
   onBrushChange,
 }: TimelineProps) {
-  // Use ResizeObserver-based hook for reliable dimension tracking
-  const { ref: containerRef, isReady: containerReady } = useContainerDimensions()
+  const { ref: containerRef, isReady, width, height } = useContainerDimensions()
 
   const stackedData = useMemo(() => transformToStacked(data), [data])
 
@@ -66,7 +51,6 @@ export function TimelineChart({
     for (const item of data) {
       types.add(item.attack)
     }
-    // Return in defined order
     return ATTACK_TYPES.filter((t) => types.has(t))
   }, [data])
 
@@ -92,70 +76,29 @@ export function TimelineChart({
     )
   }
 
-  const handleBrush = (brushData: { startIndex?: number; endIndex?: number }) => {
-    if (
-      onBrushChange &&
-      brushData.startIndex !== undefined &&
-      brushData.endIndex !== undefined
-    ) {
-      const startTime = stackedData[brushData.startIndex]?.time
-      const endTime = stackedData[brushData.endIndex]?.time
-      if (startTime && endTime) {
-        onBrushChange(startTime, endTime)
-      }
-    }
-  }
-
   return (
     <div ref={containerRef} data-testid="timeline-chart" className="h-full w-full">
-      {containerReady && (
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-        <AreaChart
+      {isReady && width > 0 && height > 0 && (
+        <LightweightStackedAreaChart
           data={stackedData}
-          margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-        >
-          <XAxis
-            dataKey="time"
-            tickFormatter={formatTime}
-            tick={{ fontSize: 10 }}
-            stroke="hsl(var(--muted-foreground))"
-          />
-          <YAxis
-            tick={{ fontSize: 10 }}
-            stroke="hsl(var(--muted-foreground))"
-            tickFormatter={(v) => v.toLocaleString()}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: 'hsl(var(--card))',
-              border: '1px solid hsl(var(--border))',
-              borderRadius: '6px',
-            }}
-            labelFormatter={(value) => new Date(value).toLocaleString()}
-          />
-          {showLegend && <Legend />}
-          {attackTypesInData.map((attackType) => (
-            <Area
-              key={attackType}
-              type="monotone"
-              dataKey={attackType}
-              stackId="1"
-              fill={ATTACK_COLORS[attackType as AttackType]}
-              stroke={ATTACK_COLORS[attackType as AttackType]}
-              fillOpacity={0.6}
-            />
+          keys={attackTypesInData}
+          width={width}
+          height={height}
+          onBrushChange={onBrushChange}
+        />
+      )}
+      {showLegend && (
+        <div className="flex flex-wrap gap-2 mt-2 px-2">
+          {attackTypesInData.map((type) => (
+            <div key={type} className="flex items-center gap-1 text-xs">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ backgroundColor: `var(--attack-${type.toLowerCase().replace(/[^a-z]/g, '-')})` }}
+              />
+              <span className="text-muted-foreground">{type}</span>
+            </div>
           ))}
-          {onBrushChange && (
-            <Brush
-              dataKey="time"
-              height={20}
-              stroke="hsl(var(--primary))"
-              tickFormatter={formatTime}
-              onChange={handleBrush}
-            />
-          )}
-        </AreaChart>
-      </ResponsiveContainer>
+        </div>
       )}
     </div>
   )
