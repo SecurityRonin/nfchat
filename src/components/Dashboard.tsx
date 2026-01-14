@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 import { MessageSquare, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ProTimeline } from './dashboard/timeline'
@@ -7,23 +7,46 @@ import { TopTalkers } from './dashboard/TopTalkers'
 import { FlowTable } from './dashboard/FlowTable'
 import { useStore } from '@/lib/store'
 import type { TimelineDataPoint } from './dashboard/timeline'
+import type { FlowRecord } from '@/lib/schema'
 
 interface DashboardProps {
   loading?: boolean
   onChatToggle?: () => void
 }
 
-export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
-  const {
-    timelineData,
-    attackBreakdown,
-    topSrcIPs,
-    topDstIPs,
-    flows,
-    totalFlowCount,
-    selectedFlow,
-    setSelectedFlow,
-  } = useStore()
+// Memoized wrapper components that subscribe to specific store slices
+// This prevents cascading re-renders when unrelated state changes
+
+const MemoizedTimeline = memo(function MemoizedTimeline({ loading }: { loading: boolean }) {
+  const timelineData = useStore((s) => s.timelineData)
+  return (
+    <ProTimeline
+      data={timelineData as TimelineDataPoint[]}
+      loading={loading}
+    />
+  )
+})
+
+const MemoizedAttackBreakdown = memo(function MemoizedAttackBreakdown() {
+  const attackBreakdown = useStore((s) => s.attackBreakdown)
+  return <AttackBreakdown data={attackBreakdown} />
+})
+
+const MemoizedTopTalkersSrc = memo(function MemoizedTopTalkersSrc() {
+  const topSrcIPs = useStore((s) => s.topSrcIPs)
+  return <TopTalkers data={topSrcIPs} />
+})
+
+const MemoizedTopTalkersDst = memo(function MemoizedTopTalkersDst() {
+  const topDstIPs = useStore((s) => s.topDstIPs)
+  return <TopTalkers data={topDstIPs} />
+})
+
+const MemoizedFlowTable = memo(function MemoizedFlowTable() {
+  const flows = useStore((s) => s.flows)
+  const totalFlowCount = useStore((s) => s.totalFlowCount)
+  const selectedFlow = useStore((s) => s.selectedFlow)
+  const setSelectedFlow = useStore((s) => s.setSelectedFlow)
 
   // Memoize selectedIndex computation to avoid O(n) search on every render
   const selectedIndex = useMemo(() => {
@@ -34,6 +57,22 @@ export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
     )
   }, [flows, selectedFlow])
 
+  // Stable callback reference - setSelectedFlow from Zustand is already stable
+  const handleRowClick = useMemo(() => {
+    return (flow: Partial<FlowRecord>) => setSelectedFlow(flow)
+  }, [setSelectedFlow])
+
+  return (
+    <FlowTable
+      data={flows}
+      totalCount={totalFlowCount}
+      onRowClick={handleRowClick}
+      selectedIndex={selectedIndex}
+    />
+  )
+})
+
+export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
   if (loading) {
     return (
       <div
@@ -76,22 +115,14 @@ export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
           <div className="col-span-8 flex flex-col gap-4">
             {/* Timeline */}
             <div className="h-56">
-              <ProTimeline
-                data={timelineData as TimelineDataPoint[]}
-                loading={loading}
-              />
+              <MemoizedTimeline loading={loading} />
             </div>
 
             {/* Flow Table */}
             <div className="flex-1 border rounded-lg p-4 min-h-0">
               <h2 className="text-sm font-medium mb-2">Flow Records</h2>
               <div className="h-[calc(100%-2rem)]">
-                <FlowTable
-                  data={flows}
-                  totalCount={totalFlowCount}
-                  onRowClick={setSelectedFlow}
-                  selectedIndex={selectedIndex}
-                />
+                <MemoizedFlowTable />
               </div>
             </div>
           </div>
@@ -102,7 +133,7 @@ export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
             <div className="h-64 border rounded-lg p-4 overflow-hidden">
               <h2 className="text-sm font-medium mb-2">Attack Types</h2>
               <div className="h-[calc(100%-2rem)] overflow-hidden">
-                <AttackBreakdown data={attackBreakdown} />
+                <MemoizedAttackBreakdown />
               </div>
             </div>
 
@@ -113,13 +144,13 @@ export function Dashboard({ loading = false, onChatToggle }: DashboardProps) {
                 <div className="overflow-hidden flex flex-col">
                   <p className="text-xs text-muted-foreground mb-1 flex-shrink-0">Source IPs</p>
                   <div className="flex-1 min-h-0">
-                    <TopTalkers data={topSrcIPs} />
+                    <MemoizedTopTalkersSrc />
                   </div>
                 </div>
                 <div className="overflow-hidden flex flex-col">
                   <p className="text-xs text-muted-foreground mb-1 flex-shrink-0">Destination IPs</p>
                   <div className="flex-1 min-h-0">
-                    <TopTalkers data={topDstIPs} />
+                    <MemoizedTopTalkersDst />
                   </div>
                 </div>
               </div>

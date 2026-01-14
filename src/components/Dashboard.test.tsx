@@ -6,22 +6,38 @@ import { useStore } from '@/lib/store'
 // Store FlowTable mock props for inspection
 let flowTableProps: Record<string, unknown> | null = null
 
+// Track render counts for performance tests
+let proTimelineRenderCount = 0
+let attackBreakdownRenderCount = 0
+let topTalkersRenderCount = 0
+let flowTableRenderCount = 0
+
 // Mock child components to isolate Dashboard layout testing
 vi.mock('./dashboard/timeline', () => ({
-  ProTimeline: () => <div data-testid="timeline-mock">ProTimeline</div>,
+  ProTimeline: () => {
+    proTimelineRenderCount++
+    return <div data-testid="timeline-mock">ProTimeline</div>
+  },
 }))
 
 vi.mock('./dashboard/AttackBreakdown', () => ({
-  AttackBreakdown: () => <div data-testid="attack-breakdown-mock">AttackBreakdown</div>,
+  AttackBreakdown: () => {
+    attackBreakdownRenderCount++
+    return <div data-testid="attack-breakdown-mock">AttackBreakdown</div>
+  },
 }))
 
 vi.mock('./dashboard/TopTalkers', () => ({
-  TopTalkers: () => <div data-testid="top-talkers-mock">TopTalkers</div>,
+  TopTalkers: () => {
+    topTalkersRenderCount++
+    return <div data-testid="top-talkers-mock">TopTalkers</div>
+  },
 }))
 
 vi.mock('./dashboard/FlowTable', () => ({
   FlowTable: (props: Record<string, unknown>) => {
     flowTableProps = props
+    flowTableRenderCount++
     return <div data-testid="flow-table-mock">FlowTable</div>
   },
 }))
@@ -29,6 +45,10 @@ vi.mock('./dashboard/FlowTable', () => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     flowTableProps = null
+    proTimelineRenderCount = 0
+    attackBreakdownRenderCount = 0
+    topTalkersRenderCount = 0
+    flowTableRenderCount = 0
     // Reset store state
     useStore.setState({
       flows: [],
@@ -38,6 +58,14 @@ describe('Dashboard', () => {
       attackBreakdown: [],
       topSrcIPs: [],
       topDstIPs: [],
+      playback: {
+        isPlaying: false,
+        currentTime: 0,
+        speed: 1,
+        duration: 0,
+        inPoint: null,
+        outPoint: null,
+      },
     })
   })
 
@@ -131,6 +159,55 @@ describe('Dashboard', () => {
       render(<Dashboard />)
 
       expect(flowTableProps?.selectedIndex).toBeUndefined()
+    })
+
+    it('does not re-render child components when playback.currentTime changes', () => {
+      render(<Dashboard />)
+
+      // Record initial render counts (should be 1 each)
+      const initialTimelineRenders = proTimelineRenderCount
+      const initialAttackRenders = attackBreakdownRenderCount
+      const initialTopTalkersRenders = topTalkersRenderCount
+      const initialFlowTableRenders = flowTableRenderCount
+
+      expect(initialTimelineRenders).toBe(1)
+      expect(initialAttackRenders).toBe(1)
+      expect(initialFlowTableRenders).toBe(1)
+
+      // Simulate playback animation frame updates (many rapid currentTime changes)
+      for (let i = 0; i < 10; i++) {
+        act(() => {
+          useStore.setState((state) => ({
+            playback: { ...state.playback, currentTime: i * 100 },
+          }))
+        })
+      }
+
+      // With proper Zustand selectors, Dashboard should NOT re-render
+      // when playback.currentTime changes, since Dashboard doesn't use that value.
+      // Child components should stay at their initial render count.
+      expect(proTimelineRenderCount).toBe(initialTimelineRenders)
+      expect(attackBreakdownRenderCount).toBe(initialAttackRenders)
+      expect(topTalkersRenderCount).toBe(initialTopTalkersRenders)
+      expect(flowTableRenderCount).toBe(initialFlowTableRenders)
+    })
+
+    it('does not re-render other components when only flows change', () => {
+      render(<Dashboard />)
+
+      const initialTimelineRenders = proTimelineRenderCount
+      const initialAttackRenders = attackBreakdownRenderCount
+
+      // Update only flows
+      act(() => {
+        useStore.setState({
+          flows: [{ FLOW_START_MILLISECONDS: 1000 }],
+        })
+      })
+
+      // Timeline and AttackBreakdown should NOT re-render when only flows change
+      expect(proTimelineRenderCount).toBe(initialTimelineRenders)
+      expect(attackBreakdownRenderCount).toBe(initialAttackRenders)
     })
   })
 })

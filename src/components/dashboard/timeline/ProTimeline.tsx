@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { useStore } from '@/lib/store'
 import { useContainerDimensions } from '@/hooks/useContainerDimensions'
 import { PREMIERE_COLORS, TIMELINE_CONFIG } from './constants'
@@ -25,10 +25,15 @@ interface TimelineDataPoint {
   count: number
 }
 
+interface AggregatedDataPoint {
+  time: number
+  count: number
+}
+
 /**
  * Aggregate data points for visualization (group by time bucket)
  */
-function aggregateData(data: TimelineDataPoint[]): { time: number; count: number }[] {
+function aggregateData(data: TimelineDataPoint[]): AggregatedDataPoint[] {
   const byTime = new Map<number, number>()
   for (const point of data) {
     byTime.set(point.time, (byTime.get(point.time) || 0) + point.count)
@@ -39,8 +44,158 @@ function aggregateData(data: TimelineDataPoint[]): { time: number; count: number
 }
 
 /**
+ * Memoized chart component that only re-renders when data changes.
+ * This prevents expensive Recharts SVG re-renders during playback animation.
+ */
+const TimelineChart = memo(function TimelineChart({
+  chartData,
+  containerReady,
+}: {
+  chartData: AggregatedDataPoint[]
+  containerReady: boolean
+}) {
+  if (!containerReady || chartData.length === 0) {
+    return null
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+      <AreaChart
+        data={chartData}
+        margin={{ top: 5, right: 0, left: 0, bottom: 0 }}
+      >
+        <defs>
+          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={PREMIERE_COLORS.playhead} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={PREMIERE_COLORS.playhead} stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+        <XAxis dataKey="time" hide />
+        <YAxis hide />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: PREMIERE_COLORS.panelBg,
+            border: `1px solid ${PREMIERE_COLORS.border}`,
+            borderRadius: 4,
+          }}
+          labelStyle={{ color: PREMIERE_COLORS.text }}
+        />
+        <Area
+          type="monotone"
+          dataKey="count"
+          stroke={PREMIERE_COLORS.playhead}
+          strokeWidth={1}
+          fill="url(#chartGradient)"
+          isAnimationActive={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  )
+})
+
+/**
+ * Memoized playhead wrapper that subscribes only to currentTime.
+ * This isolates the high-frequency updates from the rest of the component.
+ */
+const PlayheadWrapper = memo(function PlayheadWrapper({
+  timeRangeStart,
+  timeRangeEnd,
+  visible,
+  onDrag,
+}: {
+  timeRangeStart: number
+  timeRangeEnd: number
+  visible: boolean
+  onDrag: (clientX: number) => void
+}) {
+  // Fine-grained selector - only subscribes to currentTime
+  const currentTime = useStore((s) => s.playback.currentTime)
+
+  const position = timeToPercent(currentTime, timeRangeStart, timeRangeEnd)
+
+  return (
+    <Playhead
+      position={position}
+      visible={visible}
+      onDrag={onDrag}
+    />
+  )
+})
+
+/**
+ * Memoized timecode display that subscribes only to playback fields it needs.
+ */
+const TimecodeWrapper = memo(function TimecodeWrapper({
+  timeRangeStart,
+}: {
+  timeRangeStart: number
+}) {
+  // Fine-grained selectors for each field used
+  const currentTime = useStore((s) => s.playback.currentTime)
+  const duration = useStore((s) => s.playback.duration)
+  const inPoint = useStore((s) => s.playback.inPoint)
+  const outPoint = useStore((s) => s.playback.outPoint)
+
+  return (
+    <TimecodeDisplay
+      currentTime={currentTime - timeRangeStart}
+      duration={duration}
+      inPoint={inPoint ? inPoint - timeRangeStart : null}
+      outPoint={outPoint ? outPoint - timeRangeStart : null}
+    />
+  )
+})
+
+/**
+ * Memoized playback controls that subscribe only to needed fields.
+ */
+const PlaybackControlsWrapper = memo(function PlaybackControlsWrapper({
+  disabled,
+  timeRangeStart,
+  onTimeChange,
+}: {
+  disabled: boolean
+  timeRangeStart: number
+  onTimeChange?: (time: number) => void
+}) {
+  // Fine-grained selectors
+  const isPlaying = useStore((s) => s.playback.isPlaying)
+  const speed = useStore((s) => s.playback.speed)
+  const inPoint = useStore((s) => s.playback.inPoint)
+  const setIsPlaying = useStore((s) => s.setIsPlaying)
+  const setPlaybackSpeed = useStore((s) => s.setPlaybackSpeed)
+  const setCurrentTime = useStore((s) => s.setCurrentTime)
+
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying(!isPlaying)
+  }, [isPlaying, setIsPlaying])
+
+  const handleRewind = useCallback(() => {
+    const rewindTo = inPoint ?? timeRangeStart
+    setCurrentTime(rewindTo)
+    onTimeChange?.(rewindTo)
+  }, [inPoint, timeRangeStart, setCurrentTime, onTimeChange])
+
+  return (
+    <PlaybackControls
+      isPlaying={isPlaying}
+      speed={speed}
+      disabled={disabled}
+      onPlayPause={handlePlayPause}
+      onRewind={handleRewind}
+      onSpeedChange={setPlaybackSpeed}
+    />
+  )
+})
+
+/**
  * Professional Premiere Pro-style timeline with playback controls,
  * timecode display, and data visualization.
+ *
+ * Performance optimized:
+ * - Chart is memoized and only re-renders when data changes
+ * - Playhead uses fine-grained store selector for currentTime only
+ * - Animation loop uses refs to avoid re-render dependencies
  */
 export function ProTimeline({
   data,
@@ -52,6 +207,9 @@ export function ProTimeline({
   const trackRef = useRef<HTMLDivElement>(null)
   const animationRef = useRef<number | undefined>(undefined)
   const lastTickRef = useRef<number>(0)
+  // Use refs for animation loop to avoid re-creating effect on every render
+  const playbackRef = useRef({ isPlaying: false, speed: 1, currentTime: 0, inPoint: null as number | null, outPoint: null as number | null })
+  const timeRangeRef = useRef({ start: 0, end: 0 })
 
   // Use ResizeObserver-based hook for reliable dimension tracking
   const { setRef: setContainerRef, isReady: containerReady, width: trackWidth } = useContainerDimensions()
@@ -62,12 +220,19 @@ export function ProTimeline({
     setContainerRef(el)
   }, [setContainerRef])
 
-  // Zustand store
-  const playback = useStore((s) => s.playback)
-  const setIsPlaying = useStore((s) => s.setIsPlaying)
+  // Fine-grained Zustand selectors - only subscribe to what we need
+  const isPlaying = useStore((s) => s.playback.isPlaying)
+  const speed = useStore((s) => s.playback.speed)
+  const currentTime = useStore((s) => s.playback.currentTime)
+  const inPoint = useStore((s) => s.playback.inPoint)
+  const outPoint = useStore((s) => s.playback.outPoint)
   const setCurrentTime = useStore((s) => s.setCurrentTime)
-  const setPlaybackSpeed = useStore((s) => s.setPlaybackSpeed)
   const setPlaybackDuration = useStore((s) => s.setPlaybackDuration)
+
+  // Keep refs in sync for animation loop (avoids effect dependencies)
+  useEffect(() => {
+    playbackRef.current = { isPlaying, speed, currentTime, inPoint, outPoint }
+  }, [isPlaying, speed, currentTime, inPoint, outPoint])
 
   // Compute time range from data
   const timeRange = useMemo(() => {
@@ -75,6 +240,11 @@ export function ProTimeline({
     const times = data.map((d) => d.time)
     return { start: Math.min(...times), end: Math.max(...times) }
   }, [data])
+
+  // Keep timeRange ref in sync
+  useEffect(() => {
+    timeRangeRef.current = timeRange
+  }, [timeRange])
 
   // Set duration when data changes
   useEffect(() => {
@@ -85,14 +255,15 @@ export function ProTimeline({
     }
   }, [timeRange, setPlaybackDuration, setCurrentTime])
 
-  // Aggregated data for chart
+  // Aggregated data for chart - memoized
   const chartData = useMemo(() => aggregateData(data), [data])
 
-  // Playback animation loop
+  // Playback animation loop - uses refs to avoid re-creating on every state change
   useEffect(() => {
-    if (!playback.isPlaying) {
+    if (!isPlaying) {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
+        animationRef.current = undefined
       }
       return
     }
@@ -105,13 +276,14 @@ export function ProTimeline({
       const delta = timestamp - lastTickRef.current
       lastTickRef.current = timestamp
 
-      const newTime = playback.currentTime + delta * playback.speed
+      const pb = playbackRef.current
+      const tr = timeRangeRef.current
+      const newTime = pb.currentTime + delta * pb.speed
 
       // Check if we've reached the end
-      const endTime = playback.outPoint ?? timeRange.end
+      const endTime = pb.outPoint ?? tr.end
       if (newTime >= endTime) {
-        setCurrentTime(playback.inPoint ?? timeRange.start)
-        // Could also stop playing here if desired
+        setCurrentTime(pb.inPoint ?? tr.start)
       } else {
         setCurrentTime(newTime)
         onTimeChange?.(newTime)
@@ -126,18 +298,10 @@ export function ProTimeline({
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
+        animationRef.current = undefined
       }
     }
-  }, [
-    playback.isPlaying,
-    playback.speed,
-    playback.currentTime,
-    playback.inPoint,
-    playback.outPoint,
-    timeRange,
-    setCurrentTime,
-    onTimeChange,
-  ])
+  }, [isPlaying, setCurrentTime, onTimeChange])
 
   // Handle click on track to seek
   const handleTrackClick = useCallback(
@@ -169,18 +333,6 @@ export function ProTimeline({
     [timeRange, setCurrentTime, onTimeChange]
   )
 
-  const handlePlayPause = () => setIsPlaying(!playback.isPlaying)
-  const handleRewind = () => {
-    setCurrentTime(playback.inPoint ?? timeRange.start)
-    onTimeChange?.(playback.inPoint ?? timeRange.start)
-  }
-
-  const playheadPosition = timeToPercent(
-    playback.currentTime,
-    timeRange.start,
-    timeRange.end
-  )
-
   // Use width from hook, with fallback for initial render
   const rulerWidth = trackWidth > 0 ? trackWidth : 800
 
@@ -205,21 +357,13 @@ export function ProTimeline({
           backgroundColor: PREMIERE_COLORS.panelBg,
         }}
       >
-        <PlaybackControls
-          isPlaying={playback.isPlaying}
-          speed={playback.speed}
+        <PlaybackControlsWrapper
           disabled={data.length === 0}
-          onPlayPause={handlePlayPause}
-          onRewind={handleRewind}
-          onSpeedChange={setPlaybackSpeed}
+          timeRangeStart={timeRange.start}
+          onTimeChange={onTimeChange}
         />
 
-        <TimecodeDisplay
-          currentTime={playback.currentTime - timeRange.start}
-          duration={playback.duration}
-          inPoint={playback.inPoint ? playback.inPoint - timeRange.start : null}
-          outPoint={playback.outPoint ? playback.outPoint - timeRange.start : null}
-        />
+        <TimecodeWrapper timeRangeStart={timeRange.start} />
       </div>
 
       {/* Time ruler */}
@@ -240,43 +384,13 @@ export function ProTimeline({
         }}
         onClick={handleTrackClick}
       >
-        {/* Chart visualization - only render when container has dimensions */}
-        {containerReady && chartData.length > 0 && (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-            <AreaChart
-              data={chartData}
-              margin={{ top: 5, right: 0, left: 0, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={PREMIERE_COLORS.playhead} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={PREMIERE_COLORS.playhead} stopOpacity={0.05} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="time" hide />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: PREMIERE_COLORS.panelBg,
-                  border: `1px solid ${PREMIERE_COLORS.border}`,
-                  borderRadius: 4,
-                }}
-                labelStyle={{ color: PREMIERE_COLORS.text }}
-              />
-              <Area
-                type="monotone"
-                dataKey="count"
-                stroke={PREMIERE_COLORS.playhead}
-                strokeWidth={1}
-                fill="url(#chartGradient)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
+        {/* Chart visualization - memoized, only re-renders when data changes */}
+        <TimelineChart chartData={chartData} containerReady={containerReady} />
 
-        {/* Playhead */}
-        <Playhead
-          position={playheadPosition}
+        {/* Playhead - uses its own store subscription for currentTime */}
+        <PlayheadWrapper
+          timeRangeStart={timeRange.start}
+          timeRangeEnd={timeRange.end}
           visible={data.length > 0}
           onDrag={handlePlayheadDrag}
         />
