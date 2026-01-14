@@ -145,6 +145,66 @@ export async function handleQuery(req: QueryRequest): Promise<QueryResponse> {
 }
 
 /**
+ * Create materialized views for dashboard aggregations.
+ * These pre-compute expensive aggregations for fast dashboard queries.
+ */
+async function createMaterializedViews(tableName: string): Promise<void> {
+  const conn = await getConnection()
+
+  console.log('[MotherDuck] Creating materialized views...')
+
+  // Attack distribution - pre-aggregated
+  await conn.run(`
+    CREATE OR REPLACE TABLE mv_attack_breakdown AS
+    SELECT Attack as attack, COUNT(*) as count
+    FROM ${tableName}
+    GROUP BY Attack
+    ORDER BY count DESC
+  `)
+
+  // Top source IPs - pre-aggregated
+  await conn.run(`
+    CREATE OR REPLACE TABLE mv_top_src_ips AS
+    SELECT IPV4_SRC_ADDR as ip, COUNT(*) as value
+    FROM ${tableName}
+    GROUP BY IPV4_SRC_ADDR
+    ORDER BY value DESC
+    LIMIT 100
+  `)
+
+  // Top destination IPs - pre-aggregated
+  await conn.run(`
+    CREATE OR REPLACE TABLE mv_top_dst_ips AS
+    SELECT IPV4_DST_ADDR as ip, COUNT(*) as value
+    FROM ${tableName}
+    GROUP BY IPV4_DST_ADDR
+    ORDER BY value DESC
+    LIMIT 100
+  `)
+
+  // Timeline data - pre-aggregated at 1-hour buckets
+  const bucketMs = 60 * 60 * 1000 // 1 hour
+  await conn.run(`
+    CREATE OR REPLACE TABLE mv_timeline AS
+    SELECT
+      (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
+      Attack as attack,
+      COUNT(*) as count
+    FROM ${tableName}
+    GROUP BY time, attack
+    ORDER BY time DESC
+  `)
+
+  // Total count
+  await conn.run(`
+    CREATE OR REPLACE TABLE mv_total_count AS
+    SELECT COUNT(*) as cnt FROM ${tableName}
+  `)
+
+  console.log('[MotherDuck] Materialized views created successfully')
+}
+
+/**
  * Load parquet data from a URL into MotherDuck.
  */
 export async function handleLoadFromUrl(
@@ -196,6 +256,9 @@ export async function handleLoadFromUrl(
 
     console.log(`[MotherDuck] Loaded ${rowCount.toLocaleString()} rows`)
 
+    // Create materialized views for fast dashboard queries
+    await createMaterializedViews(tableName)
+
     return { success: true, rowCount }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load data'
@@ -206,7 +269,7 @@ export async function handleLoadFromUrl(
 
 /**
  * Get all dashboard data in a single API call.
- * More efficient than multiple round trips.
+ * Uses materialized views for fast initial load, falls back to raw queries for filters.
  */
 export async function handleGetDashboardData(
   req: GetDashboardDataRequest
@@ -224,49 +287,60 @@ export async function handleGetDashboardData(
   }
 
   try {
+    const isUnfiltered = whereClause === '1=1'
     const bucketMs = bucketMinutes * 60 * 1000
 
-    // Execute all queries in parallel
+    // Use materialized views for unfiltered queries (much faster)
+    // Fall back to raw table queries when filters are applied
     const [timeline, attacks, topSrcIPs, topDstIPs, flows, countResult] =
       await Promise.all([
-        // Timeline data - simplified query, limit to 50 most recent buckets
-        executeQuery<{ time: number; attack: string; count: number }>(`
-          SELECT
-            (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
-            Attack as attack,
-            COUNT(*) as count
-          FROM flows
-          WHERE ${whereClause}
-          GROUP BY time, attack
-          ORDER BY time DESC
-          LIMIT 500
-        `),
-        // Attack distribution
+        // Timeline data
+        isUnfiltered
+          ? executeQuery<{ time: number; attack: string; count: number }>(`
+              SELECT time, attack, count FROM mv_timeline LIMIT 500
+            `)
+          : executeQuery<{ time: number; attack: string; count: number }>(`
+              SELECT
+                (FLOW_START_MILLISECONDS / ${bucketMs}) * ${bucketMs} as time,
+                Attack as attack,
+                COUNT(*) as count
+              FROM flows
+              WHERE ${whereClause}
+              GROUP BY time, attack
+              ORDER BY time DESC
+              LIMIT 500
+            `),
+        // Attack distribution - always use materialized view (global stats)
         executeQuery<{ attack: string; count: number }>(`
-          SELECT Attack as attack, COUNT(*) as count
-          FROM flows
-          GROUP BY Attack
-          ORDER BY count DESC
+          SELECT attack, count FROM mv_attack_breakdown
         `),
         // Top source IPs
-        executeQuery<{ ip: string; value: number }>(`
-          SELECT IPV4_SRC_ADDR as ip, COUNT(*) as value
-          FROM flows
-          WHERE ${whereClause}
-          GROUP BY IPV4_SRC_ADDR
-          ORDER BY value DESC
-          LIMIT 10
-        `),
+        isUnfiltered
+          ? executeQuery<{ ip: string; value: number }>(`
+              SELECT ip, value FROM mv_top_src_ips LIMIT 10
+            `)
+          : executeQuery<{ ip: string; value: number }>(`
+              SELECT IPV4_SRC_ADDR as ip, COUNT(*) as value
+              FROM flows
+              WHERE ${whereClause}
+              GROUP BY IPV4_SRC_ADDR
+              ORDER BY value DESC
+              LIMIT 10
+            `),
         // Top destination IPs
-        executeQuery<{ ip: string; value: number }>(`
-          SELECT IPV4_DST_ADDR as ip, COUNT(*) as value
-          FROM flows
-          WHERE ${whereClause}
-          GROUP BY IPV4_DST_ADDR
-          ORDER BY value DESC
-          LIMIT 10
-        `),
-        // Flow records
+        isUnfiltered
+          ? executeQuery<{ ip: string; value: number }>(`
+              SELECT ip, value FROM mv_top_dst_ips LIMIT 10
+            `)
+          : executeQuery<{ ip: string; value: number }>(`
+              SELECT IPV4_DST_ADDR as ip, COUNT(*) as value
+              FROM flows
+              WHERE ${whereClause}
+              GROUP BY IPV4_DST_ADDR
+              ORDER BY value DESC
+              LIMIT 10
+            `),
+        // Flow records - always query raw table (need actual records)
         executeQuery<Record<string, unknown>>(`
           SELECT *
           FROM flows
@@ -275,14 +349,13 @@ export async function handleGetDashboardData(
           LIMIT ${limit}
           OFFSET ${offset}
         `),
-        // Total count - use approximate count for better performance
-        // For filtered queries, estimate from sample
-        whereClause === '1=1'
+        // Total count
+        isUnfiltered
           ? executeQuery<{ cnt: number | bigint }>(`
-              SELECT COUNT(*) as cnt FROM flows
+              SELECT cnt FROM mv_total_count
             `)
           : executeQuery<{ cnt: number | bigint }>(`
-              SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause} LIMIT 100000
+              SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}
             `),
       ])
 
