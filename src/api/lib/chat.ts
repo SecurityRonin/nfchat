@@ -4,9 +4,11 @@
  * Handles AI-driven data fetching flow:
  * 1. Determine what queries the AI needs to answer the question
  * 2. Analyze data with AI and return response
+ *
+ * Uses Vercel AI Gateway - no API key needed on Vercel deployments (OIDC auth)
  */
 
-import Anthropic from '@anthropic-ai/sdk'
+import { generateText } from 'ai'
 
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 1000
@@ -97,10 +99,9 @@ interface DetermineQueriesResult {
 
 /**
  * Ask AI what queries it needs to answer the question
+ * Uses Vercel AI Gateway - OIDC auth on Vercel, AI_GATEWAY_API_KEY for local dev
  */
 export async function determineNeededQueries(question: string): Promise<DetermineQueriesResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-
   // For simple greetings or non-data questions, return empty
   const lowerQuestion = question.toLowerCase()
   if (
@@ -110,47 +111,37 @@ export async function determineNeededQueries(question: string): Promise<Determin
     return { queries: [] }
   }
 
-  if (!apiKey) {
-    // Without API key, return common queries based on keywords
-    return generateFallbackQueries(question)
-  }
-
-  const client = new Anthropic({ apiKey })
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    system: buildSystemPrompt(),
-    messages: [
-      {
-        role: 'user',
-        content: `I need to answer this question about network flow data: "${question}"
+  try {
+    const result = await generateText({
+      model: 'anthropic/claude-haiku-3-5',
+      maxOutputTokens: 1024,
+      system: buildSystemPrompt(),
+      messages: [
+        {
+          role: 'user',
+          content: `I need to answer this question about network flow data: "${question}"
 
 Return a JSON object with:
 - queries: array of SQL SELECT queries needed to answer this question
 - reasoning: brief explanation of what data you need
 
 Only include queries that are necessary. Maximum 3 queries.`,
-      },
-    ],
-  })
+        },
+      ],
+    })
 
-  try {
-    const content = response.content[0]
-    if (content.type === 'text') {
-      // Extract JSON from response
-      const jsonMatch = content.text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0])
-        // Validate and sanitize each query
-        const validQueries = (parsed.queries || [])
-          .filter((q: string) => validateSQL(q))
-          .map((q: string) => sanitizeSQL(q))
-        return { queries: validQueries, reasoning: parsed.reasoning }
-      }
+    // Extract JSON from response
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      // Validate and sanitize each query
+      const validQueries = (parsed.queries || [])
+        .filter((q: string) => validateSQL(q))
+        .map((q: string) => sanitizeSQL(q))
+      return { queries: validQueries, reasoning: parsed.reasoning }
     }
   } catch (e) {
-    console.error('Failed to parse AI response:', e)
+    console.error('Failed to generate queries:', e)
   }
 
   return generateFallbackQueries(question)
@@ -193,42 +184,35 @@ interface AnalyzeResult {
 
 /**
  * Analyze data with AI and return response
+ * Uses Vercel AI Gateway - OIDC auth on Vercel, AI_GATEWAY_API_KEY for local dev
  */
 export async function analyzeWithData(
   question: string,
   data: unknown[]
 ): Promise<AnalyzeResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-
-  if (!apiKey) {
-    return {
-      response: `Based on the data provided, I can see ${data.length} records. Please configure your API key for detailed AI analysis.`,
-    }
-  }
-
-  const client = new Anthropic({ apiKey })
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 2048,
-    system: `You are a network security analyst. Analyze the provided NetFlow data and answer the user's question. Be concise but thorough. Highlight any security concerns.`,
-    messages: [
-      {
-        role: 'user',
-        content: `Question: ${question}
+  try {
+    const result = await generateText({
+      model: 'anthropic/claude-haiku-3-5',
+      maxOutputTokens: 2048,
+      system: `You are a network security analyst. Analyze the provided NetFlow data and answer the user's question. Be concise but thorough. Highlight any security concerns.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Question: ${question}
 
 Data from queries:
 ${JSON.stringify(data, null, 2)}
 
 Please analyze this data and answer the question. Focus on security implications.`,
-      },
-    ],
-  })
+        },
+      ],
+    })
 
-  const content = response.content[0]
-  if (content.type === 'text') {
-    return { response: content.text }
+    return { response: result.text }
+  } catch (e) {
+    console.error('Failed to analyze data:', e)
+    return {
+      response: `Based on the data provided, I can see ${data.length} records. AI analysis is temporarily unavailable.`,
+    }
   }
-
-  return { response: 'Unable to generate analysis.' }
 }

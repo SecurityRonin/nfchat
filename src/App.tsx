@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { useStore } from '@/lib/store'
 import { useNetflowData } from '@/hooks/useNetflowData'
-import { Dashboard } from '@/components/Dashboard'
-import { Chat } from '@/components/Chat'
+import { ForensicDashboard } from '@/components/forensic/ForensicDashboard'
 import { Settings } from '@/components/Settings'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,60 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LoadingProgress } from '@/components/LoadingProgress'
 import { Database, AlertCircle, Settings as SettingsIcon, Upload, Globe, Info } from 'lucide-react'
 import { Version } from '@/components/Version'
-import { getApiKey } from '@/components/Settings'
 
 const PARQUET_URL = 'https://pub-d25007b87b76480b851d23d324d67505.r2.dev/NF-UNSW-NB15-v3.parquet'
 
 function App() {
-  const [showChat, setShowChat] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [loadStarted, setLoadStarted] = useState(false)
 
   const { loading, error, progress, logs } = useNetflowData(loadStarted ? PARQUET_URL : '')
 
-  const {
-    messages,
-    addMessage,
-    isLoading: chatLoading,
-    setIsLoading: setChatLoading,
-  } = useStore()
-
   const handleLoadData = () => {
     setLoadStarted(true)
-  }
-
-  const handleSendMessage = async (content: string) => {
-    // Add user message
-    addMessage({ role: 'user', content })
-    setChatLoading(true)
-
-    const apiKey = getApiKey()
-    if (!apiKey) {
-      addMessage({
-        role: 'assistant',
-        content: 'Please configure your Anthropic API key in Settings to use the chat feature.',
-      })
-      setChatLoading(false)
-      setShowSettings(true)
-      return
-    }
-
-    try {
-      // TODO: Implement actual AI chat
-      // For now, show a placeholder response
-      addMessage({
-        role: 'assistant',
-        content: `I received your query: "${content}"\n\nAI chat integration coming soon. For now, use the dashboard filters to explore the data.`,
-        suggestedPivots: ['Show attack breakdown', 'Filter by Exploits', 'Top source IPs'],
-      })
-    } catch (err) {
-      addMessage({
-        role: 'assistant',
-        content: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
-      })
-    } finally {
-      setChatLoading(false)
-    }
   }
 
   // Landing page - show load options
@@ -173,27 +128,10 @@ function App() {
     )
   }
 
-  // Main dashboard
+  // Main dashboard - ForensicDashboard has integrated chat
   return (
-    <div className="h-screen flex">
-      {/* Dashboard */}
-      <div className={`flex-1 ${showChat ? 'mr-96' : ''}`}>
-        <Dashboard
-          onChatToggle={() => setShowChat(!showChat)}
-        />
-      </div>
-
-      {/* Chat Panel */}
-      {showChat && (
-        <div className="fixed right-0 top-0 bottom-0 w-96 border-l bg-background">
-          <Chat
-            messages={messages}
-            onSend={handleSendMessage}
-            onClose={() => setShowChat(false)}
-            isLoading={chatLoading}
-          />
-        </div>
-      )}
+    <>
+      <ForensicDashboard />
 
       {/* Settings Modal */}
       {showSettings && (
@@ -203,7 +141,7 @@ function App() {
           </Card>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

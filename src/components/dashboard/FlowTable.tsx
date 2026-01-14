@@ -27,6 +27,7 @@ interface FlowTableProps {
   data: Partial<FlowRecord>[]
   loading?: boolean
   onRowClick?: (flow: Partial<FlowRecord>) => void
+  onCellClick?: (column: string, value: string) => void
   selectedIndex?: number
   totalCount?: number
 }
@@ -38,12 +39,14 @@ const VirtualRow = memo(function VirtualRow({
   measureElement,
   isSelected,
   onClick,
+  onCellClick,
 }: {
   row: ReturnType<ReturnType<typeof useReactTable<Partial<FlowRecord>>>['getRowModel']>['rows'][0]
   virtualRow: { index: number; start: number; size: number }
   measureElement: (el: HTMLTableRowElement | null) => void
   isSelected: boolean
   onClick: () => void
+  onCellClick?: (column: string, value: string) => void
 }) {
   return (
     <TableRow
@@ -54,11 +57,29 @@ const VirtualRow = memo(function VirtualRow({
       }`}
       onClick={onClick}
     >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell key={cell.id} className="py-1">
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </TableCell>
-      ))}
+      {row.getVisibleCells().map((cell) => {
+        const columnId = cell.column.id
+        const rawValue = cell.getValue()
+        const stringValue = rawValue != null ? String(rawValue) : ''
+
+        const handleCellClick = onCellClick
+          ? (e: React.MouseEvent) => {
+              e.stopPropagation()
+              onCellClick(columnId, stringValue)
+            }
+          : undefined
+
+        return (
+          <TableCell key={cell.id} className="py-1">
+            <span
+              onClick={handleCellClick}
+              className={onCellClick ? 'cursor-pointer hover:underline' : ''}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </span>
+          </TableCell>
+        )
+      })}
     </TableRow>
   )
 })
@@ -67,6 +88,7 @@ export function FlowTable({
   data,
   loading = false,
   onRowClick,
+  onCellClick,
   selectedIndex,
   totalCount,
 }: FlowTableProps) {
@@ -292,6 +314,7 @@ export function FlowTable({
                   measureElement={(el) => virtualizer.measureElement(el)}
                   isSelected={selectedIndex === virtualRow.index}
                   onClick={() => handleRowClick(row.original)}
+                  onCellClick={onCellClick}
                 />
               )
             })}

@@ -5,10 +5,15 @@
  * 1. Client sends question → AI determines needed queries
  * 2. Client sends data → AI responds with analysis
  *
- * Note: These are unit tests using fallback behavior (no API key).
+ * Uses Vercel AI Gateway. Tests run in fallback mode (no AI_GATEWAY_API_KEY).
  * Integration tests with real API should be separate.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// Mock the ai module to simulate network errors (triggers fallback)
+vi.mock('ai', () => ({
+  generateText: vi.fn().mockRejectedValue(new Error('No auth configured')),
+}))
 
 describe('Chat API', () => {
   const originalEnv = process.env
@@ -16,9 +21,8 @@ describe('Chat API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
-    // No API key = fallback behavior
+    // Tests run without AI Gateway auth = fallback behavior
     process.env = { ...originalEnv }
-    delete process.env.ANTHROPIC_API_KEY
   })
 
   afterEach(() => {

@@ -28,7 +28,6 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
   const [logs, setLogs] = useState<LogEntry[]>([])
 
   const {
-    setTimelineData,
     setAttackBreakdown,
     setTopSrcIPs,
     setTopDstIPs,
@@ -63,8 +62,7 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
         offset: 0,
       })
 
-      // Update store with all data
-      setTimelineData(data.timeline)
+      // Update store with all data (timeline removed in forensic dashboard redesign)
       setAttackBreakdown(data.attacks)
       setTopSrcIPs(data.topSrcIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
       setTopDstIPs(data.topDstIPs.map((t) => ({ ip: t.ip, value: Number(t.value) })))
@@ -80,7 +78,7 @@ export function useNetflowData(parquetUrl: string): UseNetflowDataResult {
       console.error('Failed to fetch dashboard data:', err)
       throw err
     }
-  }, [setTimelineData, setAttackBreakdown, setTopSrcIPs, setTopDstIPs, setFlows, setTotalFlowCount, addLog])
+  }, [setAttackBreakdown, setTopSrcIPs, setTopDstIPs, setFlows, setTotalFlowCount, addLog])
 
   const refresh = useCallback(async (whereClause?: string) => {
     await fetchDashboardData(whereClause || '1=1')

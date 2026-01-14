@@ -295,4 +295,80 @@ describe('FlowTable', () => {
       expect(handleClick).toHaveBeenCalledTimes(1)
     })
   })
+
+  // Click-to-filter tests
+  describe('click-to-filter', () => {
+    it('calls onCellClick with column and value when cell is clicked', () => {
+      const handleCellClick = vi.fn()
+      render(<FlowTable data={mockData} onCellClick={handleCellClick} />)
+
+      // Click on the source IP cell
+      const srcIpCell = screen.getByText('59.166.0.2')
+      fireEvent.click(srcIpCell)
+
+      expect(handleCellClick).toHaveBeenCalledWith('IPV4_SRC_ADDR', '59.166.0.2')
+    })
+
+    it('calls onCellClick with Attack column when badge is clicked', () => {
+      const handleCellClick = vi.fn()
+      render(<FlowTable data={mockData} onCellClick={handleCellClick} />)
+
+      // Click on the Attack badge
+      const attackBadge = screen.getByText('Benign')
+      fireEvent.click(attackBadge)
+
+      expect(handleCellClick).toHaveBeenCalledWith('Attack', 'Benign')
+    })
+
+    it('stops propagation so row click is not triggered', () => {
+      const handleRowClick = vi.fn()
+      const handleCellClick = vi.fn()
+      render(
+        <FlowTable
+          data={mockData}
+          onRowClick={handleRowClick}
+          onCellClick={handleCellClick}
+        />
+      )
+
+      // Click on a cell value
+      const srcIpCell = screen.getByText('59.166.0.2')
+      fireEvent.click(srcIpCell)
+
+      // Cell click should be called
+      expect(handleCellClick).toHaveBeenCalled()
+      // Row click should NOT be called when cell is clicked
+      expect(handleRowClick).not.toHaveBeenCalled()
+    })
+
+    it('triggers row click when clicking empty area of row', () => {
+      const handleRowClick = vi.fn()
+      const handleCellClick = vi.fn()
+      render(
+        <FlowTable
+          data={mockData}
+          onRowClick={handleRowClick}
+          onCellClick={handleCellClick}
+        />
+      )
+
+      // Click on the row itself (not directly on cell content)
+      const row = screen.getByText('59.166.0.2').closest('tr')
+      if (row) fireEvent.click(row)
+
+      // Row click should be called
+      expect(handleRowClick).toHaveBeenCalled()
+    })
+
+    it('works with port values (numbers)', () => {
+      const handleCellClick = vi.fn()
+      render(<FlowTable data={mockData} onCellClick={handleCellClick} />)
+
+      // Click on the source port
+      const portCell = screen.getByText('4894')
+      fireEvent.click(portCell)
+
+      expect(handleCellClick).toHaveBeenCalledWith('L4_SRC_PORT', '4894')
+    })
+  })
 })
