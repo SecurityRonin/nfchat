@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useTablePageSize } from '@/hooks/useTablePageSize'
-import { chat } from '@/lib/api-client'
+import { chat, getDashboardData } from '@/lib/api-client'
 import { FlowTable } from '../dashboard/FlowTable'
 import { Chat } from '../Chat'
 import { StatsBar } from './StatsBar'
@@ -28,8 +28,12 @@ export function ForensicDashboard() {
   const tableContainerRef = useRef<HTMLDivElement>(null)
   const dynamicPageSize = useTablePageSize(tableContainerRef)
 
+  // Local state for page data (server-side paginated)
+  const [pageFlows, setPageFlows] = useState<Partial<import('@/lib/schema').FlowRecord>[]>([])
+  const [filteredTotalCount, setFilteredTotalCount] = useState(0)
+  const [pageLoading, setPageLoading] = useState(false)
+
   // Store state
-  const allFlows = useStore((s) => s.flows)
   const hideBenign = useStore((s) => s.hideBenign)
   const totalFlowCount = useStore((s) => s.totalFlowCount)
   const messages = useStore((s) => s.messages)
@@ -42,21 +46,54 @@ export function ForensicDashboard() {
   const pageSize = dynamicPageSize
   const setCurrentPage = useStore((s) => s.setCurrentPage)
 
-  // Filter and paginate flows
-  const { flows, displayedTotalPages } = useMemo(() => {
-    // First filter if hideBenign is active
-    let filtered = allFlows
-    if (hideBenign) {
-      filtered = allFlows.filter((f) => f.Attack !== 'Benign')
+  // Calculate total pages from filtered count
+  const displayedTotalPages = Math.ceil(filteredTotalCount / pageSize) || 1
+
+  // Server-side filter and paginate - reload when hideBenign, page, or pageSize changes
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPage() {
+      setPageLoading(true)
+      try {
+        const whereClause = hideBenign ? "Attack != 'Benign'" : '1=1'
+        const data = await getDashboardData({
+          whereClause,
+          limit: pageSize,
+          offset: currentPage * pageSize,
+        })
+
+        if (!cancelled) {
+          setPageFlows(data.flows)
+          setFilteredTotalCount(data.totalCount)
+        }
+      } catch (error) {
+        console.error('Failed to load page:', error)
+      } finally {
+        if (!cancelled) {
+          setPageLoading(false)
+        }
+      }
     }
-    // Calculate pages based on filtered count
-    const filteredTotalPages = Math.ceil(filtered.length / pageSize) || 1
-    // Get current page slice
-    const start = currentPage * pageSize
-    const end = start + pageSize
-    const pageFlows = filtered.slice(start, end)
-    return { flows: pageFlows, displayedTotalPages: filteredTotalPages }
-  }, [allFlows, hideBenign, currentPage, pageSize])
+
+    loadPage()
+
+    return () => {
+      cancelled = true
+    }
+  }, [hideBenign, currentPage, pageSize])
+
+  // Track previous hideBenign to detect changes (not initial mount)
+  const prevHideBenignRef = useRef(hideBenign)
+  useEffect(() => {
+    // Only reset page when hideBenign actually changes (not on mount)
+    if (prevHideBenignRef.current !== hideBenign) {
+      prevHideBenignRef.current = hideBenign
+      if (currentPage !== 0) {
+        setCurrentPage(0)
+      }
+    }
+  }, [hideBenign, currentPage, setCurrentPage])
 
   // Process a chat message through the AI
   const processChat = useCallback(
@@ -124,8 +161,9 @@ export function ForensicDashboard() {
         {/* Left: Flow Table (65%) */}
         <div ref={tableContainerRef} className="w-[65%] border-r border-border overflow-hidden">
           <FlowTable
-            data={flows}
-            totalCount={totalFlowCount}
+            data={pageFlows}
+            loading={pageLoading}
+            totalCount={filteredTotalCount}
             onCellClick={handleCellClick}
             currentPage={currentPage}
             totalPages={displayedTotalPages}
