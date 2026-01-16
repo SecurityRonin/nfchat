@@ -156,7 +156,7 @@ interface AnalyzeResult {
  * Currently using placeholder response (AI Gateway disabled)
  */
 export async function analyzeWithData(
-  question: string,
+  _question: string,
   data: unknown[]
 ): Promise<AnalyzeResult> {
   // AI Gateway temporarily disabled - return placeholder
