@@ -8,17 +8,14 @@
  * Uses Vercel AI Gateway - no API key needed on Vercel deployments (OIDC auth)
  */
 
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { generateText } from 'ai'
+import { createGateway, generateText } from 'ai'
 
-// Create Vercel AI Gateway provider using OpenAI-compatible interface
-// See: https://vercel.com/docs/ai-gateway/openai-compat
-const gateway = createOpenAICompatible({
-  name: 'vercel-ai-gateway',
-  baseURL: 'https://ai-gateway.vercel.sh/v1',
-  // On Vercel: OIDC auth is automatic via headers
-  // For local dev: set AI_GATEWAY_API_KEY env var
-  apiKey: process.env.AI_GATEWAY_API_KEY ?? 'dummy',
+// Create Vercel AI Gateway provider
+// See: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+// On Vercel: OIDC auth is automatic
+// For local dev: set AI_GATEWAY_API_KEY env var
+const gateway = createGateway({
+  apiKey: process.env.AI_GATEWAY_API_KEY ?? '',
 })
 
 const MAX_LIMIT = 10000

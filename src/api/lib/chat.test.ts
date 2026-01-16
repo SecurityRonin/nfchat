@@ -13,12 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 // Mock the ai module to simulate network errors (triggers fallback)
 vi.mock('ai', () => ({
   generateText: vi.fn().mockRejectedValue(new Error('No auth configured')),
-}))
-
-// Mock the OpenAI compatible provider
-// The gateway is called directly: gateway('model-id') not gateway.chatModel('model-id')
-vi.mock('@ai-sdk/openai-compatible', () => ({
-  createOpenAICompatible: vi.fn(() => {
+  createGateway: vi.fn(() => {
     // Return a function that creates a model when called
     return (modelId: string) => ({ modelId })
   }),
