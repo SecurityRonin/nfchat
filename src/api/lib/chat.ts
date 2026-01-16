@@ -8,7 +8,14 @@
  * Uses Vercel AI Gateway - no API key needed on Vercel deployments (OIDC auth)
  */
 
-import { generateText } from 'ai'
+import { generateText, createGateway } from 'ai'
+
+// Create gateway instance for AI SDK
+const gateway = createGateway({
+  // On Vercel: OIDC auth is automatic
+  // For local dev: set AI_GATEWAY_API_KEY env var
+  apiKey: process.env.AI_GATEWAY_API_KEY ?? '',
+})
 
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 1000
@@ -113,7 +120,7 @@ export async function determineNeededQueries(question: string): Promise<Determin
 
   try {
     const result = await generateText({
-      model: 'anthropic/claude-3.5-haiku',
+      model: gateway('anthropic/claude-3.5-haiku'),
       maxOutputTokens: 1024,
       system: buildSystemPrompt(),
       messages: [
@@ -192,7 +199,7 @@ export async function analyzeWithData(
 ): Promise<AnalyzeResult> {
   try {
     const result = await generateText({
-      model: 'anthropic/claude-3.5-haiku',
+      model: gateway('anthropic/claude-3.5-haiku'),
       maxOutputTokens: 2048,
       system: `You are a network security analyst. Analyze the provided NetFlow data and answer the user's question. Be concise but thorough. Highlight any security concerns.`,
       messages: [
