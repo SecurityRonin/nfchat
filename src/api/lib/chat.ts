@@ -12,9 +12,10 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { generateText } from 'ai'
 
 // Create Vercel AI Gateway provider using OpenAI-compatible interface
+// See: https://vercel.com/docs/ai-gateway/openai-compat
 const gateway = createOpenAICompatible({
   name: 'vercel-ai-gateway',
-  baseURL: 'https://ai-gateway.vercel.sh/v3/ai',
+  baseURL: 'https://ai-gateway.vercel.sh/v1',
   // On Vercel: OIDC auth is automatic via headers
   // For local dev: set AI_GATEWAY_API_KEY env var
   apiKey: process.env.AI_GATEWAY_API_KEY ?? 'dummy',
@@ -123,7 +124,7 @@ export async function determineNeededQueries(question: string): Promise<Determin
 
   try {
     const result = await generateText({
-      model: gateway.chatModel('anthropic/claude-3.5-haiku'),
+      model: gateway('anthropic/claude-3.5-haiku'),
       maxOutputTokens: 1024,
       system: buildSystemPrompt(),
       messages: [
@@ -202,7 +203,7 @@ export async function analyzeWithData(
 ): Promise<AnalyzeResult> {
   try {
     const result = await generateText({
-      model: gateway.chatModel('anthropic/claude-3.5-haiku'),
+      model: gateway('anthropic/claude-3.5-haiku'),
       maxOutputTokens: 2048,
       system: `You are a network security analyst. Analyze the provided NetFlow data and answer the user's question. Be concise but thorough. Highlight any security concerns.`,
       messages: [

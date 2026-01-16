@@ -16,10 +16,12 @@ vi.mock('ai', () => ({
 }))
 
 // Mock the OpenAI compatible provider
+// The gateway is called directly: gateway('model-id') not gateway.chatModel('model-id')
 vi.mock('@ai-sdk/openai-compatible', () => ({
-  createOpenAICompatible: vi.fn(() => ({
-    chatModel: (modelId: string) => ({ modelId }),
-  })),
+  createOpenAICompatible: vi.fn(() => {
+    // Return a function that creates a model when called
+    return (modelId: string) => ({ modelId })
+  }),
 }))
 
 describe('Chat API', () => {
