@@ -21,7 +21,15 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { PROTOCOL_NAMES, ATTACK_COLORS, type AttackType } from '@/lib/schema'
+import { PROTOCOL_NAMES, ATTACK_COLORS, ATTACK_TYPES, type AttackType } from '@/lib/schema'
+import { MultiSelectFilter, type FilterOption } from './MultiSelectFilter'
+
+// Attack filter options with colors
+const ATTACK_FILTER_OPTIONS: FilterOption[] = ATTACK_TYPES.map((attack) => ({
+  value: attack,
+  label: attack,
+  color: ATTACK_COLORS[attack],
+}))
 import type { FlowRecord } from '@/lib/schema'
 
 interface FlowTableProps {
@@ -179,6 +187,11 @@ export function FlowTable({
             </Badge>
           )
         },
+        filterFn: (row, columnId, filterValue: string[]) => {
+          if (!filterValue || filterValue.length === 0) return true
+          const cellValue = row.getValue(columnId) as string
+          return filterValue.includes(cellValue)
+        },
       },
     ],
     []
@@ -300,13 +313,22 @@ export function FlowTable({
             <TableRow>
               {table.getHeaderGroups()[0]?.headers.map((header) => (
                 <TableHead key={`filter-${header.id}`} className="py-1 px-2">
-                  <input
-                    type="text"
-                    placeholder="Filter..."
-                    value={(header.column.getFilterValue() as string) ?? ''}
-                    onChange={(e) => header.column.setFilterValue(e.target.value)}
-                    className="w-full text-xs px-1.5 py-0.5 border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
+                  {header.id === 'Attack' ? (
+                    <MultiSelectFilter
+                      options={ATTACK_FILTER_OPTIONS}
+                      selected={(header.column.getFilterValue() as string[]) ?? []}
+                      onChange={(values) => header.column.setFilterValue(values.length > 0 ? values : undefined)}
+                      placeholder="Filter..."
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Filter..."
+                      value={(header.column.getFilterValue() as string) ?? ''}
+                      onChange={(e) => header.column.setFilterValue(e.target.value)}
+                      className="w-full text-xs px-1.5 py-0.5 border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  )}
                 </TableHead>
               ))}
             </TableRow>
