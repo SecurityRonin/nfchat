@@ -1,5 +1,5 @@
-import { useCallback } from 'react'
-import { useStore, selectFilteredFlows } from '@/lib/store'
+import { useCallback, useMemo } from 'react'
+import { useStore } from '@/lib/store'
 import { chat } from '@/lib/api-client'
 import { FlowTable } from '../dashboard/FlowTable'
 import { Chat } from '../Chat'
@@ -24,12 +24,35 @@ const COLUMN_LABELS: Record<string, string> = {
  */
 export function ForensicDashboard() {
   // Store state
-  const flows = useStore(selectFilteredFlows)
+  const allFlows = useStore((s) => s.flows)
+  const hideBenign = useStore((s) => s.hideBenign)
   const totalFlowCount = useStore((s) => s.totalFlowCount)
   const messages = useStore((s) => s.messages)
   const isLoading = useStore((s) => s.isLoading)
   const addMessage = useStore((s) => s.addMessage)
   const setIsLoading = useStore((s) => s.setIsLoading)
+
+  // Pagination state
+  const currentPage = useStore((s) => s.currentPage)
+  const pageSize = useStore((s) => s.pageSize)
+  const setCurrentPage = useStore((s) => s.setCurrentPage)
+  const totalPages = useStore((s) => s.totalPages)
+
+  // Filter and paginate flows
+  const { flows, displayedTotalPages } = useMemo(() => {
+    // First filter if hideBenign is active
+    let filtered = allFlows
+    if (hideBenign) {
+      filtered = allFlows.filter((f) => f.Attack !== 'Benign')
+    }
+    // Calculate pages based on filtered count
+    const filteredTotalPages = Math.ceil(filtered.length / pageSize) || 1
+    // Get current page slice
+    const start = currentPage * pageSize
+    const end = start + pageSize
+    const pageFlows = filtered.slice(start, end)
+    return { flows: pageFlows, displayedTotalPages: filteredTotalPages }
+  }, [allFlows, hideBenign, currentPage, pageSize])
 
   // Process a chat message through the AI
   const processChat = useCallback(
@@ -100,6 +123,9 @@ export function ForensicDashboard() {
             data={flows}
             totalCount={totalFlowCount}
             onCellClick={handleCellClick}
+            currentPage={currentPage}
+            totalPages={displayedTotalPages}
+            onPageChange={setCurrentPage}
           />
         </div>
 

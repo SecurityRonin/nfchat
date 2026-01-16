@@ -296,6 +296,100 @@ describe('FlowTable', () => {
     })
   })
 
+  // Pagination tests
+  describe('pagination', () => {
+    it('renders pagination controls when pagination props provided', () => {
+      render(
+        <FlowTable
+          data={mockData}
+          currentPage={0}
+          totalPages={100}
+          onPageChange={vi.fn()}
+        />
+      )
+      expect(screen.getByTestId('pagination-controls')).toBeInTheDocument()
+    })
+
+    it('does not render pagination when no pagination props', () => {
+      render(<FlowTable data={mockData} />)
+      expect(screen.queryByTestId('pagination-controls')).not.toBeInTheDocument()
+    })
+
+    it('displays current page and total pages', () => {
+      render(
+        <FlowTable
+          data={mockData}
+          currentPage={4}
+          totalPages={100}
+          onPageChange={vi.fn()}
+        />
+      )
+      expect(screen.getByText(/page 5 of 100/i)).toBeInTheDocument()
+    })
+
+    it('calls onPageChange with next page when next button clicked', () => {
+      const handlePageChange = vi.fn()
+      render(
+        <FlowTable
+          data={mockData}
+          currentPage={4}
+          totalPages={100}
+          onPageChange={handlePageChange}
+        />
+      )
+
+      const nextButton = screen.getByRole('button', { name: /next/i })
+      fireEvent.click(nextButton)
+
+      expect(handlePageChange).toHaveBeenCalledWith(5)
+    })
+
+    it('calls onPageChange with previous page when prev button clicked', () => {
+      const handlePageChange = vi.fn()
+      render(
+        <FlowTable
+          data={mockData}
+          currentPage={4}
+          totalPages={100}
+          onPageChange={handlePageChange}
+        />
+      )
+
+      const prevButton = screen.getByRole('button', { name: /prev/i })
+      fireEvent.click(prevButton)
+
+      expect(handlePageChange).toHaveBeenCalledWith(3)
+    })
+
+    it('disables prev button on first page', () => {
+      render(
+        <FlowTable
+          data={mockData}
+          currentPage={0}
+          totalPages={100}
+          onPageChange={vi.fn()}
+        />
+      )
+
+      const prevButton = screen.getByRole('button', { name: /prev/i })
+      expect(prevButton).toBeDisabled()
+    })
+
+    it('disables next button on last page', () => {
+      render(
+        <FlowTable
+          data={mockData}
+          currentPage={99}
+          totalPages={100}
+          onPageChange={vi.fn()}
+        />
+      )
+
+      const nextButton = screen.getByRole('button', { name: /next/i })
+      expect(nextButton).toBeDisabled()
+    })
+  })
+
   // Click-to-filter tests
   describe('click-to-filter', () => {
     it('calls onCellClick with column and value when cell is clicked', () => {

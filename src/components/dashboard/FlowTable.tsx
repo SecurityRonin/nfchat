@@ -10,7 +10,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
 } from '@tanstack/react-table'
-import { Loader2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
+import { Loader2, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { PROTOCOL_NAMES, ATTACK_COLORS, type AttackType } from '@/lib/schema'
 import type { FlowRecord } from '@/lib/schema'
 
@@ -30,6 +31,10 @@ interface FlowTableProps {
   onCellClick?: (column: string, value: string) => void
   selectedIndex?: number
   totalCount?: number
+  // Pagination props
+  currentPage?: number
+  totalPages?: number
+  onPageChange?: (page: number) => void
 }
 
 // Memoized row component to prevent unnecessary re-renders
@@ -91,7 +96,12 @@ export function FlowTable({
   onCellClick,
   selectedIndex,
   totalCount,
+  currentPage,
+  totalPages,
+  onPageChange,
 }: FlowTableProps) {
+  // Check if pagination is enabled
+  const hasPagination = currentPage !== undefined && totalPages !== undefined && onPageChange !== undefined
   // All hooks must be called unconditionally at the top
   const parentRef = useRef<HTMLDivElement>(null)
   const [sorting, setSorting] = useState<SortingState>([])
@@ -327,6 +337,37 @@ export function FlowTable({
           </TableBody>
         </Table>
       </div>
+      {/* Pagination controls */}
+      {hasPagination && (
+        <div
+          data-testid="pagination-controls"
+          className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30"
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 0}
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Prev
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage + 1} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages - 1}
+            aria-label="Next page"
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

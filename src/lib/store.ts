@@ -50,6 +50,18 @@ export interface ChatMessage {
 }
 
 export interface AppState extends FilterState {
+  // Pagination state
+  currentPage: number;
+  pageSize: number;
+
+  // Pagination actions
+  setCurrentPage: (page: number) => void;
+  setPageSize: (size: number) => void;
+  nextPage: () => void;
+  prevPage: () => void;
+  totalPages: () => number;
+  pageOffset: () => number;
+
   // Filter actions
   setTimeRange: (start: number | null, end: number | null) => void;
   addSrcIp: (ip: string) => void;
@@ -112,8 +124,42 @@ const initialFilterState: FilterState = {
   resultCount: null,
 };
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   ...initialFilterState,
+
+  // Pagination state
+  currentPage: 0,
+  pageSize: 50,
+
+  // Pagination actions
+  setCurrentPage: (page) => set({ currentPage: page }),
+
+  setPageSize: (size) => set({ pageSize: size, currentPage: 0 }),
+
+  nextPage: () => {
+    const { currentPage, totalPages } = get();
+    const maxPage = totalPages() - 1;
+    if (currentPage < maxPage) {
+      set({ currentPage: currentPage + 1 });
+    }
+  },
+
+  prevPage: () => {
+    const { currentPage } = get();
+    if (currentPage > 0) {
+      set({ currentPage: currentPage - 1 });
+    }
+  },
+
+  totalPages: () => {
+    const { totalFlowCount, pageSize } = get();
+    return Math.ceil(totalFlowCount / pageSize);
+  },
+
+  pageOffset: () => {
+    const { currentPage, pageSize } = get();
+    return currentPage * pageSize;
+  },
 
   // Filter actions
   setTimeRange: (start, end) =>

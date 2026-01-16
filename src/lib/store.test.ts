@@ -214,6 +214,86 @@ describe('useStore', () => {
     expect(messages[0].timestamp).toBeInstanceOf(Date)
   })
 
+  describe('pagination', () => {
+    beforeEach(() => {
+      useStore.setState({
+        currentPage: 0,
+        pageSize: 50,
+        totalFlowCount: 2365425,
+      })
+    })
+
+    it('defaults to page 0 with pageSize 50', () => {
+      useStore.setState({ currentPage: 0, pageSize: 50 })
+      const state = useStore.getState()
+      expect(state.currentPage).toBe(0)
+      expect(state.pageSize).toBe(50)
+    })
+
+    it('sets current page', () => {
+      const { setCurrentPage } = useStore.getState()
+      setCurrentPage(5)
+      expect(useStore.getState().currentPage).toBe(5)
+    })
+
+    it('sets page size and resets to page 0', () => {
+      useStore.setState({ currentPage: 10 })
+      const { setPageSize } = useStore.getState()
+      setPageSize(100)
+
+      const state = useStore.getState()
+      expect(state.pageSize).toBe(100)
+      expect(state.currentPage).toBe(0) // Should reset to first page
+    })
+
+    it('goes to next page', () => {
+      useStore.setState({ currentPage: 0 })
+      const { nextPage } = useStore.getState()
+      nextPage()
+      expect(useStore.getState().currentPage).toBe(1)
+    })
+
+    it('goes to previous page', () => {
+      useStore.setState({ currentPage: 5 })
+      const { prevPage } = useStore.getState()
+      prevPage()
+      expect(useStore.getState().currentPage).toBe(4)
+    })
+
+    it('does not go below page 0', () => {
+      useStore.setState({ currentPage: 0 })
+      const { prevPage } = useStore.getState()
+      prevPage()
+      expect(useStore.getState().currentPage).toBe(0)
+    })
+
+    it('does not exceed max page', () => {
+      // 2365425 rows / 50 per page = 47309 pages (0-indexed: 0 to 47308)
+      useStore.setState({ currentPage: 47308, pageSize: 50, totalFlowCount: 2365425 })
+      const { nextPage } = useStore.getState()
+      nextPage()
+      expect(useStore.getState().currentPage).toBe(47308) // Should not exceed
+    })
+
+    it('computes total pages correctly', () => {
+      useStore.setState({ totalFlowCount: 2365425, pageSize: 50 })
+      const { totalPages } = useStore.getState()
+      expect(totalPages()).toBe(47309) // ceil(2365425 / 50)
+    })
+
+    it('computes total pages for exact division', () => {
+      useStore.setState({ totalFlowCount: 100, pageSize: 50 })
+      const { totalPages } = useStore.getState()
+      expect(totalPages()).toBe(2)
+    })
+
+    it('computes offset for current page', () => {
+      useStore.setState({ currentPage: 3, pageSize: 50 })
+      const { pageOffset } = useStore.getState()
+      expect(pageOffset()).toBe(150) // page 3 * 50 = 150
+    })
+  })
+
   describe('hideBenign filter', () => {
     it('defaults to false', () => {
       expect(useStore.getState().hideBenign).toBe(false)
