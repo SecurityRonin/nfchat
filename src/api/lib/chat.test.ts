@@ -13,7 +13,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 // Mock the ai module to simulate network errors (triggers fallback)
 vi.mock('ai', () => ({
   generateText: vi.fn().mockRejectedValue(new Error('No auth configured')),
-  // Pre-configured gateway export - returns a function that creates a model
+}))
+
+// Mock the gateway package
+vi.mock('@ai-sdk/gateway', () => ({
   gateway: vi.fn((modelId: string) => ({ modelId })),
 }))
 

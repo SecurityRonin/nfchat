@@ -8,7 +8,8 @@
  * Uses Vercel AI Gateway - no API key needed on Vercel deployments (OIDC auth)
  */
 
-import { gateway, generateText } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
+import { generateText } from 'ai'
 
 // Vercel AI Gateway provider
 // See: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
