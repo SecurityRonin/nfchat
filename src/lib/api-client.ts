@@ -29,6 +29,15 @@ interface DashboardResponse {
   error?: string
 }
 
+interface FlowsResponse {
+  success: boolean
+  data?: {
+    flows: Record<string, unknown>[]
+    totalCount: number
+  }
+  error?: string
+}
+
 interface QueryResponse {
   success: boolean
   data?: Record<string, unknown>[]
@@ -142,6 +151,30 @@ export async function getDashboardData(options?: {
 
   if (!response.data) {
     throw new Error('No data returned from dashboard endpoint')
+  }
+
+  return response.data
+}
+
+/**
+ * Get flows with pagination (lightweight - no aggregations).
+ * Use this for page navigation and filter changes.
+ */
+export async function getFlows(options?: {
+  whereClause?: string
+  limit?: number
+  offset?: number
+}): Promise<{ flows: Record<string, unknown>[]; totalCount: number }> {
+  const { whereClause = '1=1', limit = 50, offset = 0 } = options ?? {}
+
+  const response = await apiPost<FlowsResponse>('/api/motherduck/flows', {
+    whereClause,
+    limit,
+    offset,
+  })
+
+  if (!response.data) {
+    throw new Error('No data returned from flows endpoint')
   }
 
   return response.data

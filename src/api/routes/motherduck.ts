@@ -378,6 +378,67 @@ export async function handleGetDashboardData(
 }
 
 /**
+ * Get just flows with pagination (fast - no aggregations).
+ * Used for page navigation and filter changes.
+ */
+export interface GetFlowsRequest {
+  whereClause?: string
+  limit?: number
+  offset?: number
+}
+
+export interface GetFlowsResponse {
+  success: boolean
+  data?: {
+    flows: Record<string, unknown>[]
+    totalCount: number
+  }
+  error?: string
+}
+
+export async function handleGetFlows(
+  req: GetFlowsRequest
+): Promise<GetFlowsResponse> {
+  const { whereClause = '1=1', limit = 50, offset = 0 } = req
+
+  if (!getToken()) {
+    return { success: false, error: 'MotherDuck token not configured' }
+  }
+
+  try {
+    // Run flows query and count in parallel
+    const [flows, countResult] = await Promise.all([
+      executeQuery<Record<string, unknown>>(`
+        SELECT *
+        FROM flows
+        WHERE ${whereClause}
+        ORDER BY FLOW_START_MILLISECONDS DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `),
+      // Use approximate count for filtered queries (much faster)
+      whereClause === '1=1'
+        ? executeQuery<{ cnt: number | bigint }>(`SELECT cnt FROM mv_total_count`)
+        : executeQuery<{ cnt: number | bigint }>(`
+            SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}
+          `),
+    ])
+
+    return {
+      success: true,
+      data: {
+        flows: convertBigInts(flows),
+        totalCount: Number(countResult[0].cnt),
+      },
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to get flows'
+    console.error('[MotherDuck] GetFlows error:', message)
+    return { success: false, error: message }
+  }
+}
+
+/**
  * Reset the connection (useful for testing).
  */
 export function resetConnection(): void {

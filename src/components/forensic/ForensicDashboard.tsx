@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useTablePageSize } from '@/hooks/useTablePageSize'
-import { chat, getDashboardData } from '@/lib/api-client'
+import { chat, getFlows } from '@/lib/api-client'
 import { FlowTable } from '../dashboard/FlowTable'
 import { Chat } from '../Chat'
 import { StatsBar } from './StatsBar'
@@ -50,6 +50,7 @@ export function ForensicDashboard() {
   const displayedTotalPages = Math.ceil(filteredTotalCount / pageSize) || 1
 
   // Server-side filter and paginate - reload when hideBenign, page, or pageSize changes
+  // Uses lightweight getFlows endpoint (only 2 queries vs 6 in getDashboardData)
   useEffect(() => {
     let cancelled = false
 
@@ -57,7 +58,7 @@ export function ForensicDashboard() {
       setPageLoading(true)
       try {
         const whereClause = hideBenign ? "Attack != 'Benign'" : '1=1'
-        const data = await getDashboardData({
+        const data = await getFlows({
           whereClause,
           limit: pageSize,
           offset: currentPage * pageSize,
