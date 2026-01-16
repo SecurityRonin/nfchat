@@ -62,13 +62,13 @@ describe('useTablePageSize', () => {
   })
 
   it('recalculates on container resize', () => {
-    let capturedCallback: ResizeObserverCallback | null = null
+    const callbackHolder: { fn: ResizeObserverCallback | null } = { fn: null }
 
     global.ResizeObserver = class {
       callback: ResizeObserverCallback
       constructor(callback: ResizeObserverCallback) {
         this.callback = callback
-        capturedCallback = callback
+        callbackHolder.fn = callback
       }
       observe() {}
       unobserve() {}
@@ -87,9 +87,7 @@ describe('useTablePageSize', () => {
 
     // Simulate resize
     mockElement.clientHeight = 800
-    if (capturedCallback) {
-      capturedCallback([], {} as ResizeObserver)
-    }
+    callbackHolder.fn?.([], {} as ResizeObserver)
     rerender()
 
     // After resize to larger container, should have more rows

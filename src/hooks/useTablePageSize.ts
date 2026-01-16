@@ -1,4 +1,4 @@
-import { useState, useEffect, RefObject } from 'react'
+import { useState, useEffect, type RefObject } from 'react'
 
 // Constants for row height calculation
 const ROW_HEIGHT = 35 // pixels per row (matches virtualizer estimateSize)
@@ -12,7 +12,7 @@ const MAX_ROWS = 100
  * Returns number of rows that fit in the available space.
  */
 export function useTablePageSize(
-  containerRef: RefObject<HTMLDivElement> | null
+  containerRef: RefObject<HTMLDivElement | null> | null
 ): number {
   const [pageSize, setPageSize] = useState(MIN_ROWS)
 

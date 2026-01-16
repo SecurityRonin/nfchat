@@ -35,7 +35,6 @@ export function ForensicDashboard() {
 
   // Store state
   const hideBenign = useStore((s) => s.hideBenign)
-  const totalFlowCount = useStore((s) => s.totalFlowCount)
   const messages = useStore((s) => s.messages)
   const isLoading = useStore((s) => s.isLoading)
   const addMessage = useStore((s) => s.addMessage)
