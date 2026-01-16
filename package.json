@@ -17,6 +17,7 @@
     "generate:test-data": "tsx e2e/fixtures/generate-test-data.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.13",
     "@duckdb/duckdb-wasm": "^1.33.1-dev16.0",
     "@duckdb/node-api": "^1.4.3-r.3",
     "@motherduck/wasm-client": "^0.8.1",

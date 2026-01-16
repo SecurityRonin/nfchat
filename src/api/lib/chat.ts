@@ -8,13 +8,16 @@
  * Uses Vercel AI Gateway - no API key needed on Vercel deployments (OIDC auth)
  */
 
-import { generateText, createGateway } from 'ai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { generateText } from 'ai'
 
-// Create gateway instance for AI SDK
-const gateway = createGateway({
-  // On Vercel: OIDC auth is automatic
+// Create Vercel AI Gateway provider using OpenAI-compatible interface
+const gateway = createOpenAICompatible({
+  name: 'vercel-ai-gateway',
+  baseURL: 'https://ai-gateway.vercel.sh/v3/ai',
+  // On Vercel: OIDC auth is automatic via headers
   // For local dev: set AI_GATEWAY_API_KEY env var
-  apiKey: process.env.AI_GATEWAY_API_KEY ?? '',
+  apiKey: process.env.AI_GATEWAY_API_KEY ?? 'dummy',
 })
 
 const MAX_LIMIT = 10000
@@ -120,7 +123,7 @@ export async function determineNeededQueries(question: string): Promise<Determin
 
   try {
     const result = await generateText({
-      model: gateway('anthropic/claude-3.5-haiku'),
+      model: gateway.chatModel('anthropic/claude-3.5-haiku'),
       maxOutputTokens: 1024,
       system: buildSystemPrompt(),
       messages: [
@@ -199,7 +202,7 @@ export async function analyzeWithData(
 ): Promise<AnalyzeResult> {
   try {
     const result = await generateText({
-      model: gateway('anthropic/claude-3.5-haiku'),
+      model: gateway.chatModel('anthropic/claude-3.5-haiku'),
       maxOutputTokens: 2048,
       system: `You are a network security analyst. Analyze the provided NetFlow data and answer the user's question. Be concise but thorough. Highlight any security concerns.`,
       messages: [
