@@ -139,13 +139,11 @@
   box-shadow: var(--crt-glow);
 }
 
-/* Logo - green phosphor monochrome (preserves internal details) */
+/* Logo - green phosphor monochrome (black stays black, rest is uniform green) */
 .crt-logo {
-  filter: grayscale(1) sepia(1) saturate(3) hue-rotate(85deg) brightness(1.2);
-  opacity: 0.9;
+  filter: grayscale(1) contrast(3) sepia(1) saturate(100) hue-rotate(85deg);
 }
 
 .crt-logo:hover {
-  filter: grayscale(1) sepia(1) saturate(4) hue-rotate(85deg) brightness(1.4) drop-shadow(0 0 10px var(--crt-green));
-  opacity: 1;
+  filter: grayscale(1) contrast(3) sepia(1) saturate(100) hue-rotate(85deg) brightness(1.2) drop-shadow(0 0 10px var(--crt-green));
 }
