@@ -139,13 +139,13 @@
   box-shadow: var(--crt-glow);
 }
 
-/* Logo - green phosphor monochrome */
+/* Logo - green phosphor monochrome (true CRT look) */
 .crt-logo {
-  filter: grayscale(1) brightness(1.4) sepia(1) saturate(10000%) hue-rotate(85deg);
-  opacity: 0.9;
+  filter: brightness(0) saturate(100%) invert(48%) sepia(95%) saturate(1000%) hue-rotate(85deg) brightness(1.1);
+  opacity: 0.85;
 }
 
 .crt-logo:hover {
-  filter: grayscale(1) brightness(1.6) sepia(1) saturate(10000%) hue-rotate(85deg) drop-shadow(0 0 8px var(--crt-green));
+  filter: brightness(0) saturate(100%) invert(48%) sepia(95%) saturate(1000%) hue-rotate(85deg) brightness(1.3) drop-shadow(0 0 10px var(--crt-green));
   opacity: 1;
 }
