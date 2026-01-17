@@ -86,7 +86,7 @@ describe('App', () => {
 
       render(<App />)
 
-      expect(screen.getByText(/Powered by MotherDuck/i)).toBeInTheDocument()
+      expect(screen.getByText(/Security Ronin/i)).toBeInTheDocument()
     })
   })
 
@@ -154,8 +154,8 @@ describe('App', () => {
       await waitFor(() => {
         // When loading, dropzone should disappear and CRT loading should be visible
         expect(screen.queryByTestId('crt-dropzone')).not.toBeInTheDocument()
-        // Should show the Powered by MotherDuck footer (present in loading state)
-        expect(screen.getByText(/Powered by MotherDuck/i)).toBeInTheDocument()
+        // Should show the Security Ronin footer (present in loading state)
+        expect(screen.getByText(/Security Ronin/i)).toBeInTheDocument()
       })
     })
 
@@ -353,7 +353,7 @@ describe('App', () => {
       fireEvent.click(screen.getByText(/demo dataset/i))
 
       await waitFor(() => {
-        expect(screen.getByText(/Powered by MotherDuck/i)).toBeInTheDocument()
+        expect(screen.getByText(/Security Ronin/i)).toBeInTheDocument()
       })
     })
   })
@@ -475,7 +475,7 @@ describe('App', () => {
       fireEvent.click(screen.getByText(/demo dataset/i))
 
       await waitFor(() => {
-        expect(screen.getByText(/Powered by MotherDuck/i)).toBeInTheDocument()
+        expect(screen.getByText(/Security Ronin/i)).toBeInTheDocument()
       })
     })
 

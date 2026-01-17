@@ -90,7 +90,7 @@ function App() {
 
           {/* Footer */}
           <div className="text-center crt-glow-dim text-xs pt-8">
-            Powered by MotherDuck
+            Security Ronin • NetFlow Analysis
           </div>
         </div>
       </div>
@@ -136,7 +136,7 @@ function App() {
 
           {/* Footer */}
           <div className="text-center crt-glow-dim text-xs pt-8">
-            Powered by MotherDuck
+            Security Ronin • NetFlow Analysis
           </div>
         </div>
       </div>

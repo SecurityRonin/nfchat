@@ -75,7 +75,7 @@ describe('LandingPage', () => {
     it('renders MotherDuck footer', () => {
       render(<LandingPage onDataReady={vi.fn()} />)
 
-      expect(screen.getByText(/Powered by MotherDuck/i)).toBeInTheDocument()
+      expect(screen.getByText(/Security Ronin/i)).toBeInTheDocument()
     })
   })
 
@@ -335,7 +335,7 @@ describe('LandingPage', () => {
     it('footer has dim glow effect', () => {
       render(<LandingPage onDataReady={vi.fn()} />)
 
-      const footer = screen.getByText(/Powered by MotherDuck/i)
+      const footer = screen.getByText(/Security Ronin/i)
       expect(footer.closest('div')).toHaveClass('crt-glow-dim')
     })
 
