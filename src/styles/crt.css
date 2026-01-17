@@ -139,7 +139,7 @@
   box-shadow: var(--crt-glow);
 }
 
-/* Logo - matches CRT green text color (#00ff00) */
+/* Logo - green with black details preserved */
 .crt-logo {
-  filter: invert(42%) sepia(93%) saturate(1352%) hue-rotate(87deg) brightness(119%) contrast(119%);
+  filter: grayscale(1) sepia(1) saturate(100) hue-rotate(70deg) brightness(1.1) drop-shadow(0 0 3px #00ff00);
 }
