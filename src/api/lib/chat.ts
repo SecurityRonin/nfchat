@@ -5,11 +5,12 @@
  * 1. Determine what queries the AI needs to answer the question
  * 2. Analyze data with AI and return response
  *
- * Uses Vercel AI Gateway - no API key needed on Vercel deployments (OIDC auth)
+ * Uses Vercel AI Gateway:
+ * - OIDC auth automatic on Vercel deployments
+ * - For local dev: set AI_GATEWAY_API_KEY or use `vercel dev`
  */
 
-// AI Gateway temporarily disabled - using fallback mode only
-// TODO: Re-enable when Vercel AI Gateway OIDC issues are resolved
+import { generateText } from 'ai'
 
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 1000
@@ -66,20 +67,43 @@ Available columns in the 'flows' table:
 `
 
 /**
- * Build the system prompt for the AI
+ * Build the system prompt for query generation
  */
-export function buildSystemPrompt(): string {
+export function buildQuerySystemPrompt(): string {
   return `You are a network security analyst assistant helping analyze NetFlow data.
 
 ${NETFLOW_SCHEMA}
 
-When asked questions about the network data:
-1. Generate SQL queries to answer the question
-2. Only use SELECT statements
-3. Always include reasonable LIMIT clauses
-4. Focus on security-relevant analysis
+When asked questions about the network data, generate SQL queries to answer the question.
+Rules:
+1. Only use SELECT statements
+2. Always include LIMIT clauses (max ${MAX_LIMIT})
+3. Focus on security-relevant analysis
+4. Use proper SQL syntax for DuckDB
 
-Respond with JSON containing the SQL queries needed.`
+Respond with a JSON object containing:
+{
+  "queries": ["SQL query 1", "SQL query 2", ...],
+  "reasoning": "Brief explanation of why these queries help answer the question"
+}`
+}
+
+/**
+ * Build the system prompt for data analysis
+ */
+export function buildAnalysisSystemPrompt(): string {
+  return `You are a network security analyst assistant helping analyze NetFlow data.
+
+${NETFLOW_SCHEMA}
+
+Analyze the provided query results and give a clear, actionable security analysis.
+Focus on:
+1. Identifying suspicious patterns or anomalies
+2. Highlighting potential security threats
+3. Providing specific recommendations
+4. Summarizing key findings concisely
+
+Be direct and security-focused in your response.`
 }
 
 /**
@@ -131,7 +155,7 @@ interface DetermineQueriesResult {
 
 /**
  * Ask AI what queries it needs to answer the question
- * Currently using keyword-based fallback mode (AI Gateway disabled)
+ * Uses Vercel AI Gateway with automatic OIDC auth
  */
 export async function determineNeededQueries(question: string): Promise<DetermineQueriesResult> {
   // For simple greetings or non-data questions, return empty
@@ -143,8 +167,35 @@ export async function determineNeededQueries(question: string): Promise<Determin
     return { queries: [] }
   }
 
-  // Use keyword-based fallback (AI Gateway temporarily disabled)
-  return generateFallbackQueries(question)
+  // First, check for "Filter by X = Y" pattern (click-to-filter)
+  const filterQuery = parseFilterPattern(question)
+  if (filterQuery) {
+    return { queries: [filterQuery] }
+  }
+
+  try {
+    // Use Vercel AI Gateway - OIDC auth is automatic on Vercel
+    const { text } = await generateText({
+      model: 'anthropic/claude-sonnet-4',
+      system: buildQuerySystemPrompt(),
+      prompt: question,
+    })
+
+    // Parse JSON response
+    const parsed = JSON.parse(text)
+    const queries = (parsed.queries || [])
+      .filter((q: string) => validateSQL(q))
+      .map((q: string) => sanitizeSQL(q))
+
+    return {
+      queries,
+      reasoning: parsed.reasoning,
+    }
+  } catch (error) {
+    // Fallback to keyword-based queries if AI fails
+    console.error('[Chat] AI Gateway error, using fallback:', error)
+    return generateFallbackQueries(question)
+  }
 }
 
 /**
@@ -182,12 +233,6 @@ function parseFilterPattern(question: string): string | null {
  * Generate fallback queries based on keywords when AI is unavailable
  */
 function generateFallbackQueries(question: string): DetermineQueriesResult {
-  // First, check for "Filter by X = Y" pattern (click-to-filter)
-  const filterQuery = parseFilterPattern(question)
-  if (filterQuery) {
-    return { queries: [filterQuery] }
-  }
-
   const lowerQuestion = question.toLowerCase()
   const queries: string[] = []
 
@@ -221,14 +266,36 @@ interface AnalyzeResult {
 
 /**
  * Analyze data with AI and return response
- * Currently using placeholder response (AI Gateway disabled)
+ * Uses Vercel AI Gateway with automatic OIDC auth
  */
 export async function analyzeWithData(
-  _question: string,
+  question: string,
   data: unknown[]
 ): Promise<AnalyzeResult> {
-  // AI Gateway temporarily disabled - return placeholder
-  return {
-    response: `Based on the data provided, I can see ${data.length} records. AI analysis is temporarily unavailable.`,
+  if (data.length === 0) {
+    return { response: 'No data was returned from the query. Try asking a different question.' }
+  }
+
+  try {
+    // Use Vercel AI Gateway - OIDC auth is automatic on Vercel
+    const { text } = await generateText({
+      model: 'anthropic/claude-sonnet-4',
+      system: buildAnalysisSystemPrompt(),
+      prompt: `Question: ${question}
+
+Query Results (${data.length} records):
+${JSON.stringify(data.slice(0, 100), null, 2)}
+${data.length > 100 ? `\n... and ${data.length - 100} more records` : ''}
+
+Analyze these results and provide security insights.`,
+    })
+
+    return { response: text }
+  } catch (error) {
+    // Fallback response if AI fails
+    console.error('[Chat] AI Gateway error in analysis:', error)
+    return {
+      response: `Based on the data provided, I can see ${data.length} records. AI analysis encountered an error. Please check AI Gateway configuration.`,
+    }
   }
 }

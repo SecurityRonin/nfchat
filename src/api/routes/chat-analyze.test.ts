@@ -82,7 +82,7 @@ describe('POST /api/chat/analyze', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.response).toContain('0 records')
+    expect(result.response).toContain('No data was returned')
   })
 
   it('validates turnstile token when secret is configured', async () => {
