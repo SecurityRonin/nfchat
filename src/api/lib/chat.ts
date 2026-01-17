@@ -14,6 +14,37 @@
 const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 1000
 
+// Mapping from readable filter labels to SQL column names
+// Must match COLUMN_LABELS in ForensicDashboard.tsx (but reversed)
+const FILTER_LABEL_TO_COLUMN: Record<string, string> = {
+  'source ip': 'IPV4_SRC_ADDR',
+  'destination ip': 'IPV4_DST_ADDR',
+  'src ip': 'IPV4_SRC_ADDR',
+  'dst ip': 'IPV4_DST_ADDR',
+  'source port': 'L4_SRC_PORT',
+  'destination port': 'L4_DST_PORT',
+  'src port': 'L4_SRC_PORT',
+  'dst port': 'L4_DST_PORT',
+  'protocol': 'PROTOCOL',
+  'attack type': 'Attack',
+  'attack': 'Attack',
+  'in bytes': 'IN_BYTES',
+  'out bytes': 'OUT_BYTES',
+}
+
+// Columns that should be treated as numeric (no quotes around value)
+const NUMERIC_COLUMNS = new Set([
+  'L4_SRC_PORT',
+  'L4_DST_PORT',
+  'PROTOCOL',
+  'IN_BYTES',
+  'OUT_BYTES',
+  'IN_PKTS',
+  'OUT_PKTS',
+  'TCP_FLAGS',
+  'Label',
+])
+
 // Netflow schema for the AI to understand
 const NETFLOW_SCHEMA = `
 Available columns in the 'flows' table:
@@ -117,9 +148,46 @@ export async function determineNeededQueries(question: string): Promise<Determin
 }
 
 /**
+ * Parse "Filter by X = Y" patterns from click-to-filter actions
+ * Returns SQL query if pattern matches, null otherwise
+ */
+function parseFilterPattern(question: string): string | null {
+  // Match "Filter by <label> = <value>" pattern (case-insensitive)
+  const match = question.match(/^filter by\s+(.+?)\s*=\s*(.+)$/i)
+  if (!match) return null
+
+  const [, labelPart, valuePart] = match
+  const label = labelPart.trim().toLowerCase()
+  const value = valuePart.trim()
+
+  // Look up column name from label
+  const columnName = FILTER_LABEL_TO_COLUMN[label]
+  if (!columnName) return null
+
+  // Build WHERE clause with proper quoting
+  let whereCondition: string
+  if (NUMERIC_COLUMNS.has(columnName)) {
+    // Numeric column - no quotes
+    whereCondition = `${columnName} = ${value}`
+  } else {
+    // String column - escape single quotes and wrap in quotes
+    const escapedValue = value.replace(/'/g, "''")
+    whereCondition = `${columnName} = '${escapedValue}'`
+  }
+
+  return `SELECT * FROM flows WHERE ${whereCondition} LIMIT ${DEFAULT_LIMIT}`
+}
+
+/**
  * Generate fallback queries based on keywords when AI is unavailable
  */
 function generateFallbackQueries(question: string): DetermineQueriesResult {
+  // First, check for "Filter by X = Y" pattern (click-to-filter)
+  const filterQuery = parseFilterPattern(question)
+  if (filterQuery) {
+    return { queries: [filterQuery] }
+  }
+
   const lowerQuestion = question.toLowerCase()
   const queries: string[] = []
 

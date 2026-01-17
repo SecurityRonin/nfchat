@@ -69,6 +69,71 @@ describe('Chat API', () => {
 
       expect(result.queries.length).toBeGreaterThan(0)
     })
+
+    describe('Filter by X = Y pattern (click-to-filter)', () => {
+      it('generates correct SQL for destination IP filter', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by destination IP = 149.171.126.10')
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain("IPV4_DST_ADDR = '149.171.126.10'")
+      })
+
+      it('generates correct SQL for source IP filter', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by source IP = 192.168.1.1')
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain("IPV4_SRC_ADDR = '192.168.1.1'")
+      })
+
+      it('generates correct SQL for source port filter', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by source port = 8080')
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain('L4_SRC_PORT = 8080')
+      })
+
+      it('generates correct SQL for destination port filter', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by destination port = 443')
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain('L4_DST_PORT = 443')
+      })
+
+      it('generates correct SQL for attack type filter', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by attack type = DDoS')
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain("Attack = 'DDoS'")
+      })
+
+      it('generates correct SQL for protocol filter', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by protocol = 6')
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain('PROTOCOL = 6')
+      })
+
+      it('escapes single quotes in filter values', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries("Filter by attack type = O'Reilly")
+
+        expect(result.queries.length).toBe(1)
+        expect(result.queries[0]).toContain("Attack = 'O''Reilly'")
+      })
+
+      it('returns proper SELECT with WHERE and LIMIT', async () => {
+        const { determineNeededQueries } = await import('./chat')
+        const result = await determineNeededQueries('Filter by source IP = 10.0.0.1')
+
+        expect(result.queries[0]).toMatch(/^SELECT .+ FROM flows WHERE .+ LIMIT \d+$/)
+      })
+    })
   })
 
   describe('analyzeWithData (fallback mode)', () => {
