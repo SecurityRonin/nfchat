@@ -8,6 +8,7 @@
  * imports from shared modules in the api/ directory.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { generateText } from 'ai'
 
 // ============================================================================
 // Inlined from src/api/lib/turnstile.ts
@@ -74,20 +75,77 @@ async function verifyTurnstileToken(
 }
 
 // ============================================================================
-// Inlined from src/api/lib/chat.ts (fallback mode only)
+// Inlined from src/api/lib/chat.ts - uses Vercel AI Gateway
 // ============================================================================
+
+// Netflow schema for the AI to understand
+const NETFLOW_SCHEMA = `
+Available columns in the 'flows' table:
+- FLOW_START_MILLISECONDS (BIGINT): Flow start timestamp
+- FLOW_END_MILLISECONDS (BIGINT): Flow end timestamp
+- IPV4_SRC_ADDR (VARCHAR): Source IP address
+- L4_SRC_PORT (BIGINT): Source port
+- IPV4_DST_ADDR (VARCHAR): Destination IP address
+- L4_DST_PORT (BIGINT): Destination port
+- PROTOCOL (BIGINT): IP protocol number (6=TCP, 17=UDP, 1=ICMP)
+- IN_BYTES (BIGINT): Incoming bytes
+- OUT_BYTES (BIGINT): Outgoing bytes
+- IN_PKTS (BIGINT): Incoming packets
+- OUT_PKTS (BIGINT): Outgoing packets
+- TCP_FLAGS (BIGINT): TCP flags
+- FLOW_DURATION_MILLISECONDS (BIGINT): Flow duration
+- Attack (VARCHAR): Attack type label (e.g., 'Benign', 'Exploits', 'DoS', 'Fuzzers', etc.)
+- Label (BIGINT): Binary label (0=benign, 1=attack)
+`
+
+function buildAnalysisSystemPrompt(): string {
+  return `You are a network security analyst assistant helping analyze NetFlow data.
+
+${NETFLOW_SCHEMA}
+
+Analyze the provided query results and give a clear, actionable security analysis.
+Focus on:
+1. Identifying suspicious patterns or anomalies
+2. Highlighting potential security threats
+3. Providing specific recommendations
+4. Summarizing key findings concisely
+
+Be direct and security-focused in your response.`
+}
 
 interface AnalyzeResult {
   response: string
 }
 
 async function analyzeWithData(
-  _question: string,
+  question: string,
   data: unknown[]
 ): Promise<AnalyzeResult> {
-  // AI Gateway temporarily disabled - return placeholder
-  return {
-    response: `Based on the data provided, I can see ${data.length} records. AI analysis is temporarily unavailable.`,
+  if (data.length === 0) {
+    return { response: 'No data was returned from the query. Try asking a different question.' }
+  }
+
+  try {
+    // Use Vercel AI Gateway - OIDC auth is automatic on Vercel
+    const { text } = await generateText({
+      model: 'anthropic/claude-sonnet-4',
+      system: buildAnalysisSystemPrompt(),
+      prompt: `Question: ${question}
+
+Query Results (${data.length} records):
+${JSON.stringify(data.slice(0, 100), null, 2)}
+${data.length > 100 ? `\n... and ${data.length - 100} more records` : ''}
+
+Analyze these results and provide security insights.`,
+    })
+
+    return { response: text }
+  } catch (error) {
+    // Fallback response if AI fails
+    console.error('[Chat] AI Gateway error in analysis:', error)
+    return {
+      response: `Based on the data provided, I can see ${data.length} records. AI analysis encountered an error. Please check AI Gateway configuration.`,
+    }
   }
 }
 

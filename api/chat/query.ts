@@ -8,6 +8,7 @@
  * imports from shared modules in the api/ directory.
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { generateText } from 'ai'
 
 // ============================================================================
 // Inlined from src/api/lib/turnstile.ts
@@ -74,10 +75,76 @@ async function verifyTurnstileToken(
 }
 
 // ============================================================================
-// Inlined from src/api/lib/chat.ts (fallback mode only)
+// Inlined from src/api/lib/chat.ts - uses Vercel AI Gateway
 // ============================================================================
 
+const MAX_LIMIT = 10000
 const DEFAULT_LIMIT = 1000
+
+// Netflow schema for the AI to understand
+const NETFLOW_SCHEMA = `
+Available columns in the 'flows' table:
+- FLOW_START_MILLISECONDS (BIGINT): Flow start timestamp
+- FLOW_END_MILLISECONDS (BIGINT): Flow end timestamp
+- IPV4_SRC_ADDR (VARCHAR): Source IP address
+- L4_SRC_PORT (BIGINT): Source port
+- IPV4_DST_ADDR (VARCHAR): Destination IP address
+- L4_DST_PORT (BIGINT): Destination port
+- PROTOCOL (BIGINT): IP protocol number (6=TCP, 17=UDP, 1=ICMP)
+- IN_BYTES (BIGINT): Incoming bytes
+- OUT_BYTES (BIGINT): Outgoing bytes
+- IN_PKTS (BIGINT): Incoming packets
+- OUT_PKTS (BIGINT): Outgoing packets
+- TCP_FLAGS (BIGINT): TCP flags
+- FLOW_DURATION_MILLISECONDS (BIGINT): Flow duration
+- Attack (VARCHAR): Attack type label (e.g., 'Benign', 'Exploits', 'DoS', 'Fuzzers', etc.)
+- Label (BIGINT): Binary label (0=benign, 1=attack)
+`
+
+function buildQuerySystemPrompt(): string {
+  return `You are a network security analyst assistant helping analyze NetFlow data.
+
+${NETFLOW_SCHEMA}
+
+When asked questions about the network data, generate SQL queries to answer the question.
+Rules:
+1. Only use SELECT statements
+2. Always include LIMIT clauses (max ${MAX_LIMIT})
+3. Focus on security-relevant analysis
+4. Use proper SQL syntax for DuckDB
+
+Respond with a JSON object containing:
+{
+  "queries": ["SQL query 1", "SQL query 2", ...],
+  "reasoning": "Brief explanation of why these queries help answer the question"
+}`
+}
+
+function validateSQL(sql: string): boolean {
+  const normalized = sql.trim().toUpperCase()
+  if (!normalized.startsWith('SELECT')) return false
+  const forbidden = ['DROP', 'DELETE', 'INSERT', 'UPDATE', 'ALTER', 'CREATE', 'TRUNCATE', 'EXEC', 'EXECUTE']
+  for (const keyword of forbidden) {
+    const regex = new RegExp(`\\b${keyword}\\b`)
+    if (regex.test(normalized)) return false
+  }
+  return true
+}
+
+function sanitizeSQL(sql: string): string {
+  const normalized = sql.trim().toUpperCase()
+  if (!normalized.includes('LIMIT')) {
+    return `${sql.trim()} LIMIT ${DEFAULT_LIMIT}`
+  }
+  const limitMatch = normalized.match(/LIMIT\s+(\d+)/)
+  if (limitMatch) {
+    const limit = parseInt(limitMatch[1], 10)
+    if (limit > MAX_LIMIT) {
+      return sql.replace(/LIMIT\s+\d+/i, `LIMIT ${MAX_LIMIT}`)
+    }
+  }
+  return sql
+}
 
 // Mapping from readable filter labels to SQL column names
 const FILTER_LABEL_TO_COLUMN: Record<string, string> = {
@@ -140,12 +207,6 @@ function parseFilterPattern(question: string): string | null {
 }
 
 function generateFallbackQueries(question: string): DetermineQueriesResult {
-  // First, check for "Filter by X = Y" pattern (click-to-filter)
-  const filterQuery = parseFilterPattern(question)
-  if (filterQuery) {
-    return { queries: [filterQuery] }
-  }
-
   const lowerQuestion = question.toLowerCase()
   const queries: string[] = []
 
@@ -183,8 +244,35 @@ async function determineNeededQueries(question: string): Promise<DetermineQuerie
     return { queries: [] }
   }
 
-  // Use keyword-based fallback (AI Gateway temporarily disabled)
-  return generateFallbackQueries(question)
+  // First, check for "Filter by X = Y" pattern (click-to-filter)
+  const filterQuery = parseFilterPattern(question)
+  if (filterQuery) {
+    return { queries: [filterQuery] }
+  }
+
+  try {
+    // Use Vercel AI Gateway - OIDC auth is automatic on Vercel
+    const { text } = await generateText({
+      model: 'anthropic/claude-sonnet-4',
+      system: buildQuerySystemPrompt(),
+      prompt: question,
+    })
+
+    // Parse JSON response
+    const parsed = JSON.parse(text)
+    const queries = (parsed.queries || [])
+      .filter((q: string) => validateSQL(q))
+      .map((q: string) => sanitizeSQL(q))
+
+    return {
+      queries,
+      reasoning: parsed.reasoning,
+    }
+  } catch (error) {
+    // Fallback to keyword-based queries if AI fails
+    console.error('[Chat] AI Gateway error, using fallback:', error)
+    return generateFallbackQueries(question)
+  }
 }
 
 // ============================================================================

@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
+  "devCommand": "vite",
   "functions": {
     "api/motherduck/*.ts": {
       "maxDuration": 60,
