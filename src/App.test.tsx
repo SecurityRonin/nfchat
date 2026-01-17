@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import App from './App'
 import * as useNetflowDataModule from '@/hooks/useNetflowData'
+import type { ProgressStage } from '@/lib/progress'
 
 // Mock the hooks
 vi.mock('@/hooks/useNetflowData', () => ({
@@ -36,7 +37,7 @@ const mockDefaultHookReturn = () => ({
   loading: false,
   error: null,
   totalRows: 0,
-  progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+  progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
   logs: [],
   refresh: vi.fn(),
 })
@@ -135,10 +136,10 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: 'Loading...', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: 'Loading...', timestamp: Date.now() },
             logs: [
-              { level: 'info', message: 'Connecting to MotherDuck...', timestamp: Date.now() },
-              { level: 'info', message: 'Loading data...', timestamp: Date.now() },
+              { level: 'info' as const, message: 'Connecting to MotherDuck...', timestamp: Date.now() },
+              { level: 'info' as const, message: 'Loading data...', timestamp: Date.now() },
             ],
             refresh: vi.fn(),
           }
@@ -166,7 +167,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 30, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 30, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -193,7 +194,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -217,7 +218,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -241,7 +242,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 75, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 75, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -264,7 +265,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -287,10 +288,10 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [
-              { level: 'info', message: 'First message', timestamp: Date.now() },
-              { level: 'info', message: 'Second message', timestamp: Date.now() },
+              { level: 'info' as const, message: 'First message', timestamp: Date.now() },
+              { level: 'info' as const, message: 'Second message', timestamp: Date.now() },
             ],
             refresh: vi.fn(),
           }
@@ -315,9 +316,9 @@ describe('App', () => {
             loading: false,
             error: 'some error',
             totalRows: 0,
-            progress: { stage: 'done', percent: 100, message: '', timestamp: Date.now() },
+            progress: { stage: 'complete' as ProgressStage, percent: 100, message: '', timestamp: Date.now() },
             logs: [
-              { level: 'info', message: 'Complete', timestamp: Date.now() },
+              { level: 'info' as const, message: 'Complete', timestamp: Date.now() },
             ],
             refresh: vi.fn(),
           }
@@ -341,7 +342,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -366,7 +367,7 @@ describe('App', () => {
             loading: false,
             error: 'Connection failed',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -392,7 +393,7 @@ describe('App', () => {
             loading: false,
             error: 'Test error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -415,7 +416,7 @@ describe('App', () => {
             loading: false,
             error: 'Network timeout',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -439,7 +440,7 @@ describe('App', () => {
             loading: false,
             error: 'Error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -463,7 +464,7 @@ describe('App', () => {
             loading: false,
             error: 'Error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -486,7 +487,7 @@ describe('App', () => {
             loading: false,
             error: 'Connection failed',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -526,7 +527,7 @@ describe('App', () => {
             loading: false,
             error: 'Error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -585,7 +586,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -616,7 +617,7 @@ describe('App', () => {
             loading: false,
             error: null,
             totalRows: 1000,
-            progress: { stage: 'done', percent: 100, message: '', timestamp: Date.now() },
+            progress: { stage: 'complete' as ProgressStage, percent: 100, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -639,7 +640,7 @@ describe('App', () => {
             loading: false,
             error: null,
             totalRows: 1000,
-            progress: { stage: 'done', percent: 100, message: '', timestamp: Date.now() },
+            progress: { stage: 'complete' as ProgressStage, percent: 100, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -665,7 +666,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -690,7 +691,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -714,7 +715,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -738,7 +739,7 @@ describe('App', () => {
             loading: false,
             error: 'Error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -768,7 +769,7 @@ describe('App', () => {
             loading: false,
             error: 'First error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -810,7 +811,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -836,7 +837,7 @@ describe('App', () => {
             loading: false,
             error: 'Error',
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -863,7 +864,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -889,9 +890,9 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: [
-              { level: 'info', message: 'Only entry', timestamp: Date.now() },
+              { level: 'info' as const, message: 'Only entry', timestamp: Date.now() },
             ],
             refresh: vi.fn(),
           }
@@ -910,7 +911,7 @@ describe('App', () => {
 
     it('handles many log entries', async () => {
       const manyLogs = Array.from({ length: 20 }, (_, i) => ({
-        level: 'info',
+        level: 'info' as const,
         message: `Log entry ${i}`,
         timestamp: Date.now(),
       }))
@@ -921,7 +922,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            progress: { stage: 'downloading' as ProgressStage, percent: 50, message: '', timestamp: Date.now() },
             logs: manyLogs,
             refresh: vi.fn(),
           }
@@ -947,7 +948,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -970,7 +971,7 @@ describe('App', () => {
             loading: true,
             error: null,
             totalRows: 0,
-            progress: { stage: 'done', percent: 100, message: '', timestamp: Date.now() },
+            progress: { stage: 'complete' as ProgressStage, percent: 100, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
@@ -995,7 +996,7 @@ describe('App', () => {
             loading: false,
             error: longError,
             totalRows: 0,
-            progress: { stage: 'initializing', percent: 0, message: '', timestamp: Date.now() },
+            progress: { stage: 'initializing' as ProgressStage, percent: 0, message: '', timestamp: Date.now() },
             logs: [],
             refresh: vi.fn(),
           }
