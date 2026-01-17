@@ -58,7 +58,7 @@ export function LandingPage({ onDataReady }: LandingPageProps) {
             <img
               src="/security-ronin-logo.png"
               alt="Security Ronin"
-              className="h-24 w-auto"
+              className="h-24 w-auto crt-logo"
             />
           </a>
         </div>

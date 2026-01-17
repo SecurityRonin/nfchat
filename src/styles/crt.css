@@ -138,3 +138,14 @@
   color: var(--crt-black);
   box-shadow: var(--crt-glow);
 }
+
+/* Logo - green phosphor monochrome */
+.crt-logo {
+  filter: grayscale(1) brightness(1.4) sepia(1) saturate(10000%) hue-rotate(85deg);
+  opacity: 0.9;
+}
+
+.crt-logo:hover {
+  filter: grayscale(1) brightness(1.6) sepia(1) saturate(10000%) hue-rotate(85deg) drop-shadow(0 0 8px var(--crt-green));
+  opacity: 1;
+}

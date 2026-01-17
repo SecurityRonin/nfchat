@@ -318,6 +318,13 @@ describe('LandingPage', () => {
       expect(logo).toHaveClass('h-24')
     })
 
+    it('logo has CRT green phosphor styling', () => {
+      render(<LandingPage onDataReady={vi.fn()} />)
+
+      const logo = screen.getByAltText(/security ronin/i)
+      expect(logo).toHaveClass('crt-logo')
+    })
+
     it('headline has glow effect', () => {
       render(<LandingPage onDataReady={vi.fn()} />)
 

@@ -210,6 +210,30 @@ describe('App', () => {
       })
     })
 
+    it('logo has CRT green phosphor styling during loading', async () => {
+      vi.mocked(useNetflowDataModule.useNetflowData).mockImplementation((url) => {
+        if (url) {
+          return {
+            loading: true,
+            error: null,
+            totalRows: 0,
+            progress: { stage: 'downloading', percent: 50, message: '', timestamp: Date.now() },
+            logs: [],
+            refresh: vi.fn(),
+          }
+        }
+        return mockDefaultHookReturn()
+      })
+
+      render(<App />)
+      fireEvent.click(screen.getByText(/demo dataset/i))
+
+      await waitFor(() => {
+        const logo = screen.getByAltText(/security ronin/i)
+        expect(logo).toHaveClass('crt-logo')
+      })
+    })
+
     it('shows progress percentage', async () => {
       vi.mocked(useNetflowDataModule.useNetflowData).mockImplementation((url) => {
         if (url) {
