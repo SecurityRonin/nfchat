@@ -7,7 +7,7 @@
  *
  * Uses Vercel AI Gateway:
  * - OIDC auth automatic on Vercel deployments
- * - For local dev: set AI_GATEWAY_API_KEY or use `vercel dev`
+ * - For local dev: use `vercel dev` (no API keys needed)
  */
 
 import { generateText } from 'ai'
