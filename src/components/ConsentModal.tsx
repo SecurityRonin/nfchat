@@ -8,6 +8,9 @@
 import { useState, useEffect } from 'react'
 import { Button } from './ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from './ui/card'
+import { logger } from '@/lib/logger'
+
+const consentLogger = logger.child('Consent')
 
 const CONSENT_KEY = 'nfchat_consent'
 const CONSENT_EXPIRY_DAYS = 90
@@ -27,7 +30,10 @@ function getStoredConsent(): ConsentData | null {
     const stored = localStorage.getItem(CONSENT_KEY)
     if (!stored) return null
     return JSON.parse(stored)
-  } catch {
+  } catch (error) {
+    consentLogger.warn('Failed to parse stored consent, treating as no consent', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
     return null
   }
 }

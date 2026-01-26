@@ -125,7 +125,7 @@ describe('App', () => {
       fireEvent.click(demoLink)
 
       await waitFor(() => {
-        expect(capturedUrl).toContain('NF-UNSW-NB15-v3.parquet')
+        expect(capturedUrl).toContain('UWF-ZeekData24.parquet')
       })
     })
 

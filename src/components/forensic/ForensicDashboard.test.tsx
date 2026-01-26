@@ -33,6 +33,10 @@ vi.mock('./StatsBar', () => ({
   StatsBar: () => <div data-testid="stats-bar-mock">StatsBar</div>,
 }))
 
+vi.mock('./KillChainTimeline', () => ({
+  KillChainTimeline: () => <div data-testid="kill-chain-mock">KillChainTimeline</div>,
+}))
+
 describe('ForensicDashboard', () => {
   beforeEach(() => {
     capturedFlowTableProps = {}

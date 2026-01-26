@@ -54,6 +54,14 @@ export interface FlowRecord {
   DST_TO_SRC_IAT_STDDEV: number;
   Label: string;
   Attack: string;
+  // MITRE ATT&CK fields (UWF-ZeekData24)
+  MITRE_TACTIC?: string;
+  MITRE_TECHNIQUE?: string;
+  // Zeek-specific fields
+  CONN_STATE?: string;
+  SERVICE?: string;
+  HISTORY?: string;
+  COMMUNITY_ID?: string;
 }
 
 export const SCHEMA_DESCRIPTION = `
@@ -87,10 +95,16 @@ Columns:
 - DNS_QUERY_TYPE (INTEGER): DNS query type (1=A, 2=NS, 5=CNAME, etc.)
 - DNS_TTL_ANSWER (INTEGER): TTL of DNS A record
 - Label (VARCHAR): Binary classification (Benign/Attack)
-- Attack (VARCHAR): Attack type (Benign, Exploits, Fuzzers, Generic, Reconnaissance, DoS, Backdoor, Shellcode, Analysis, Worms)
+- Attack (VARCHAR): Attack type / MITRE Tactic
+- MITRE_TACTIC (VARCHAR): MITRE ATT&CK Tactic (Credential Access, Reconnaissance, Initial Access, etc.)
+- MITRE_TECHNIQUE (VARCHAR): MITRE ATT&CK Technique ID (T1110, T1595, T1078, T1190, T1048, etc.)
+- CONN_STATE (VARCHAR): Zeek connection state (S0, S1, SF, REJ, etc.)
+- SERVICE (VARCHAR): Detected application protocol (http, dns, ssh, etc.)
+- COMMUNITY_ID (VARCHAR): Community ID flow hash for cross-tool correlation
 `;
 
-export const ATTACK_TYPES = [
+// Legacy attack types (NF-UNSW-NB15)
+export const LEGACY_ATTACK_TYPES = [
   'Benign',
   'Exploits',
   'Fuzzers',
@@ -103,9 +117,34 @@ export const ATTACK_TYPES = [
   'Worms',
 ] as const;
 
+// MITRE ATT&CK Tactics (UWF-ZeekData24)
+export const MITRE_TACTICS = [
+  'Benign',
+  'Credential Access',
+  'Reconnaissance',
+  'Initial Access',
+  'Defense Evasion',
+  'Persistence',
+  'Privilege Escalation',
+  'Exfiltration',
+  'Lateral Movement',
+  'Collection',
+  'Command and Control',
+  'Impact',
+  'Execution',
+  'Discovery',
+] as const;
+
+// Combined attack types (supports both datasets)
+export const ATTACK_TYPES = [
+  ...LEGACY_ATTACK_TYPES,
+  ...MITRE_TACTICS.filter(t => !LEGACY_ATTACK_TYPES.includes(t as never)),
+] as const;
+
 export type AttackType = (typeof ATTACK_TYPES)[number];
 
-export const ATTACK_COLORS: Record<AttackType, string> = {
+export const ATTACK_COLORS: Record<string, string> = {
+  // Legacy attack types
   Benign: '#22c55e',      // green
   Exploits: '#ef4444',    // red
   Fuzzers: '#f97316',     // orange
@@ -116,6 +155,20 @@ export const ATTACK_COLORS: Record<AttackType, string> = {
   Shellcode: '#14b8a6',   // teal
   Analysis: '#6366f1',    // indigo
   Worms: '#78716c',       // stone
+  // MITRE ATT&CK Tactics
+  'Credential Access': '#dc2626',   // red-600
+  'Initial Access': '#ea580c',      // orange-600
+  'Defense Evasion': '#ca8a04',     // yellow-600
+  'Persistence': '#65a30d',         // lime-600
+  'Privilege Escalation': '#0d9488', // teal-600
+  'Exfiltration': '#7c3aed',        // violet-600
+  'Lateral Movement': '#db2777',    // pink-600
+  'Collection': '#0284c7',          // sky-600
+  'Command and Control': '#9333ea', // purple-600
+  'Impact': '#be123c',              // rose-700
+  'Execution': '#c2410c',           // orange-700
+  'Discovery': '#4f46e5',           // indigo-600
+  'Unknown': '#71717a',             // zinc-500
 };
 
 export const PROTOCOL_NAMES: Record<number, string> = {
@@ -137,4 +190,16 @@ export const L7_PROTO_NAMES: Record<number, string> = {
   91: 'SSH',
   92: 'SSL/TLS',
   131: 'HTTPS',
+};
+
+// MITRE ATT&CK Technique Reference (UWF-ZeekData24)
+export const MITRE_TECHNIQUES: Record<string, { name: string; tactic: string; url: string }> = {
+  'T1110': { name: 'Brute Force', tactic: 'Credential Access', url: 'https://attack.mitre.org/techniques/T1110/' },
+  'T1595': { name: 'Active Scanning', tactic: 'Reconnaissance', url: 'https://attack.mitre.org/techniques/T1595/' },
+  'T1078': { name: 'Valid Accounts', tactic: 'Defense Evasion', url: 'https://attack.mitre.org/techniques/T1078/' },
+  'T1190': { name: 'Exploit Public-Facing Application', tactic: 'Initial Access', url: 'https://attack.mitre.org/techniques/T1190/' },
+  'T1048': { name: 'Exfiltration Over Alternative Protocol', tactic: 'Exfiltration', url: 'https://attack.mitre.org/techniques/T1048/' },
+  'T1046': { name: 'Network Service Discovery', tactic: 'Discovery', url: 'https://attack.mitre.org/techniques/T1046/' },
+  'T1071': { name: 'Application Layer Protocol', tactic: 'Command and Control', url: 'https://attack.mitre.org/techniques/T1071/' },
+  'T1021': { name: 'Remote Services', tactic: 'Lateral Movement', url: 'https://attack.mitre.org/techniques/T1021/' },
 };

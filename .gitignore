@@ -38,3 +38,6 @@ test-results/
 
 # Vercel temp files
 .env.vercel.tmp
+
+# Demo data
+data/

@@ -122,12 +122,6 @@ function MessageBubble({ message, onPivot }: MessageBubbleProps) {
           </div>
         )}
 
-        {/* SQL Query */}
-        {message.sql && (
-          <div className="mt-2 p-2 bg-background/50 rounded text-xs font-mono overflow-x-auto">
-            {message.sql}
-          </div>
-        )}
 
         {/* Suggested Pivots */}
         {message.suggestedPivots && message.suggestedPivots.length > 0 && (

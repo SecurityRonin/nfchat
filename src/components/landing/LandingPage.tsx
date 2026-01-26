@@ -3,7 +3,7 @@ import { CRTDropzone } from './CRTDropzone'
 import { CRTLoadingLog, type CRTLogEntry } from './CRTLoadingLog'
 import '@/styles/crt.css'
 
-const DEMO_PARQUET_URL = 'https://pub-d25007b87b76480b851d23d324d67505.r2.dev/NF-UNSW-NB15-v3.parquet'
+const DEMO_PARQUET_URL = 'https://pub-d25007b87b76480b851d23d324d67505.r2.dev/UWF-ZeekData24.parquet'
 
 type PageState = 'ready' | 'loading' | 'error'
 

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IR Analyst NetFlow Questions Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #333;
+        }
+        h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 10px; }
+        h2 { color: #16213e; margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        h3 { color: #0f3460; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #16213e; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .critical { background-color: #ffebee; }
+        .high { background-color: #fff3e0; }
+        .medium { background-color: #fffde7; }
+        .standard { background-color: #e8f5e9; }
+        .yes { color: #2e7d32; font-weight: bold; }
+        .partial { color: #f57c00; font-weight: bold; }
+        .no { color: #c62828; font-weight: bold; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; }
+        pre { background: #1a1a2e; color: #e8e8e8; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .header-info { background: #f0f4f8; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .toc { background: #fafafa; padding: 20px; border-radius: 5px; margin-bottom: 30px; }
+        .toc ul { list-style-type: none; padding-left: 0; }
+        .toc li { margin: 8px 0; }
+        .emoji { font-size: 1.2em; }
+        @media print {
+            body { font-size: 11pt; }
+            a { color: #0066cc; }
+            .page-break { page-break-before: always; }
+        }
+    </style>
+</head>
+<body>
+    <h1>IR Analyst NetFlow Questions Report</h1>
+    <p><em>Ranked by Importance and Urgency for Incident Response</em></p>
+
+    <div class="header-info">
+        <strong>Generated:</strong> January 12, 2026<br>
+        <strong>Purpose:</strong> Guide IR analysts on critical netflow questions during incident firefighting<br>
+        <strong>Demo Dataset:</strong> NF-UNSW-NB15-v3 (UQ:6e0eda1)
+    </div>
+
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#demo-dataset">1. Demo Dataset Overview</a></li>
+            <li><a href="#questions">2. IR Questions Ranked by Urgency</a></li>
+            <li><a href="#features">3. Dataset Feature Summary</a></li>
+            <li><a href="#datasets">4. Publicly Accessible NetFlow Datasets</a></li>
+            <li><a href="#sources">5. Sources</a></li>
+        </ul>
+    </div>
+
+    <h2 id="demo-dataset">1. Demo Dataset: NF-UNSW-NB15-v3</h2>
+
+    <p>Based on the <a href="https://espace.library.uq.edu.au/view/UQ:6e0eda1" target="_blank">UQ eSpace listing</a>, your dataset specifications:</p>
+
+    <table>
+        <tr><th>Property</th><th>Value</th></tr>
+        <tr><td>Features</td><td>53 (43 base + 10 temporal)</td></tr>
+        <tr><td>Total Flows</td><td>2,365,424</td></tr>
+        <tr><td>Attack Ratio</td><td>5.4% attacks, 94.6% benign</td></tr>
+        <tr><td>Attack Classes</td><td>Fuzzers, Backdoor, DoS, Exploits, Analysis, Worms, Generic, Shellcode, Reconnaissance</td></tr>
+        <tr><td>Format</td><td>CSV</td></tr>
+        <tr><td>Direct Download</td><td><a href="https://rdm.uq.edu.au/files/abd2f5d8-e268-4ff0-84fb-f2f7b3ca3e8f" target="_blank">rdm.uq.edu.au</a></td></tr>
+    </table>
+
+    <h2 id="questions">2. IR Analyst Questions Ranked by Urgency</h2>
+
+    <h3><span class="emoji">&#128308;</span> CRITICAL (First 5 Minutes of Incident)</h3>
+    <table>
+        <tr><th>#</th><th>Question</th><th>Demo?</th><th>Required Features</th></tr>
+        <tr class="critical">
+            <td>1</td>
+            <td><strong>What external IPs is the compromised host talking to?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>IPV4_SRC_ADDR</code>, <code>IPV4_DST_ADDR</code></td>
+        </tr>
+        <tr class="critical">
+            <td>2</td>
+            <td><strong>Is there active C2 beaconing?</strong> (regular interval connections)</td>
+            <td class="yes">YES</td>
+            <td><code>FLOW_DURATION_MILLISECONDS</code>, <code>SRC_TO_DST_IAT_*</code>, IP pairs</td>
+        </tr>
+        <tr class="critical">
+            <td>3</td>
+            <td><strong>What ports are being used for outbound connections?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>L4_DST_PORT</code>, <code>L4_SRC_PORT</code>, <code>PROTOCOL</code></td>
+        </tr>
+        <tr class="critical">
+            <td>4</td>
+            <td><strong>How much data has been exfiltrated?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>IN_BYTES</code>, <code>OUT_BYTES</code>, <code>SRC_TO_DST_SECOND_BYTES</code></td>
+        </tr>
+        <tr class="critical">
+            <td>5</td>
+            <td><strong>Is there lateral movement to other internal hosts?</strong></td>
+            <td class="partial">PARTIAL</td>
+            <td>IPs present but no internal/external classification</td>
+        </tr>
+    </table>
+
+    <h3><span class="emoji">&#128992;</span> HIGH (First 30 Minutes)</h3>
+    <table>
+        <tr><th>#</th><th>Question</th><th>Demo?</th><th>Required Features</th></tr>
+        <tr class="high">
+            <td>6</td>
+            <td><strong>Who are the top talkers by bytes transferred?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>IN_BYTES</code>, <code>OUT_BYTES</code>, group by IP</td>
+        </tr>
+        <tr class="high">
+            <td>7</td>
+            <td><strong>Are there connections to known-bad ports?</strong> (4444, 8080, etc.)</td>
+            <td class="yes">YES</td>
+            <td><code>L4_DST_PORT</code></td>
+        </tr>
+        <tr class="high">
+            <td>8</td>
+            <td><strong>What's the connection duration pattern?</strong> (long-lived = tunnel)</td>
+            <td class="yes">YES</td>
+            <td><code>FLOW_DURATION_MILLISECONDS</code></td>
+        </tr>
+        <tr class="high">
+            <td>9</td>
+            <td><strong>Is there DNS tunneling?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>L7_PROTO</code>, <code>DNS_QUERY_TYPE</code>, port 53 traffic</td>
+        </tr>
+        <tr class="high">
+            <td>10</td>
+            <td><strong>What protocols are being used?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>PROTOCOL</code>, <code>L7_PROTO</code></td>
+        </tr>
+    </table>
+
+    <h3><span class="emoji">&#128993;</span> MEDIUM (First Hour)</h3>
+    <table>
+        <tr><th>#</th><th>Question</th><th>Demo?</th><th>Required Features</th></tr>
+        <tr class="medium">
+            <td>11</td>
+            <td><strong>Are there port scans from internal hosts?</strong></td>
+            <td class="yes">YES</td>
+            <td>Many flows to different <code>L4_DST_PORT</code> from same source</td>
+        </tr>
+        <tr class="medium">
+            <td>12</td>
+            <td><strong>What's the packet size distribution?</strong> (small=C2, large=exfil)</td>
+            <td class="yes">YES</td>
+            <td><code>NUM_PKTS_*_BYTES</code>, <code>MIN/MAX_IP_PKT_LEN</code></td>
+        </tr>
+        <tr class="medium">
+            <td>13</td>
+            <td><strong>Are there TCP flag anomalies?</strong> (SYN floods, RST storms)</td>
+            <td class="yes">YES</td>
+            <td><code>TCP_FLAGS</code>, <code>CLIENT_TCP_FLAGS</code>, <code>SERVER_TCP_FLAGS</code></td>
+        </tr>
+        <tr class="medium">
+            <td>14</td>
+            <td><strong>What's the throughput pattern?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>SRC_TO_DST_AVG_THROUGHPUT</code>, <code>DST_TO_SRC_AVG_THROUGHPUT</code></td>
+        </tr>
+        <tr class="medium">
+            <td>15</td>
+            <td><strong>When did suspicious activity start/end?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>FLOW_START_MILLISECONDS</code>, <code>FLOW_END_MILLISECONDS</code></td>
+        </tr>
+    </table>
+
+    <h3><span class="emoji">&#128994;</span> STANDARD (Post-Containment Analysis)</h3>
+    <table>
+        <tr><th>#</th><th>Question</th><th>Demo?</th><th>Required Features</th></tr>
+        <tr class="standard">
+            <td>16</td>
+            <td><strong>What was the attack timeline?</strong></td>
+            <td class="yes">YES</td>
+            <td>Temporal features + flow timestamps</td>
+        </tr>
+        <tr class="standard">
+            <td>17</td>
+            <td><strong>How many hosts were affected?</strong></td>
+            <td class="yes">YES</td>
+            <td>Unique <code>IPV4_DST_ADDR</code> count</td>
+        </tr>
+        <tr class="standard">
+            <td>18</td>
+            <td><strong>What attack categories occurred?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>Attack</code> label column</td>
+        </tr>
+        <tr class="standard">
+            <td>19</td>
+            <td><strong>Were there retransmissions?</strong> (network stress/evasion)</td>
+            <td class="yes">YES</td>
+            <td><code>RETRANSMITTED_*</code> features</td>
+        </tr>
+        <tr class="standard">
+            <td>20</td>
+            <td><strong>What's the inter-arrival time pattern?</strong></td>
+            <td class="yes">YES</td>
+            <td><code>*_IAT_MIN/MAX/AVG/STDDEV</code></td>
+        </tr>
+    </table>
+
+    <h3><span class="emoji">&#10060;</span> NOT ANSWERABLE with Demo Dataset</h3>
+    <table>
+        <tr><th>Question</th><th>Missing Data</th></tr>
+        <tr><td>What domain names were contacted?</td><td>No DNS query content</td></tr>
+        <tr><td>What URLs were accessed?</td><td>No HTTP payload</td></tr>
+        <tr><td>What user accounts were involved?</td><td>No user/auth data</td></tr>
+        <tr><td>What files were transferred?</td><td>No file metadata</td></tr>
+        <tr><td>What specific malware was used?</td><td>No payload inspection</td></tr>
+        <tr><td>Geographic location of threat actors?</td><td>No GeoIP enrichment</td></tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 id="features">3. Dataset Feature Summary (53 Features)</h2>
+
+    <pre>
+NETWORK ADDRESSING (5):     IPV4_SRC_ADDR, IPV4_DST_ADDR, L4_SRC_PORT, L4_DST_PORT, PROTOCOL
+
+TRAFFIC VOLUME (4):         IN_BYTES, OUT_BYTES, IN_PKTS, OUT_PKTS
+
+FLOW TIMING (6):            FLOW_DURATION_MILLISECONDS, TCP_FLAGS, CLIENT_TCP_FLAGS,
+                            SERVER_TCP_FLAGS, DURATION_IN, DURATION_OUT
+
+PACKET METRICS (8):         MIN_TTL, MAX_TTL, LONGEST_FLOW_PKT, SHORTEST_FLOW_PKT,
+                            MIN_IP_PKT_LEN, MAX_IP_PKT_LEN, SRC_TO_DST_SECOND_BYTES,
+                            DST_TO_SRC_SECOND_BYTES
+
+RETRANSMISSION (4):         RETRANSMITTED_IN_BYTES, RETRANSMITTED_IN_PKTS,
+                            RETRANSMITTED_OUT_BYTES, RETRANSMITTED_OUT_PKTS
+
+THROUGHPUT (2):             SRC_TO_DST_AVG_THROUGHPUT, DST_TO_SRC_AVG_THROUGHPUT
+
+PACKET SIZE DIST (5):       NUM_PKTS_UP_TO_128_BYTES, NUM_PKTS_128_TO_256_BYTES,
+                            NUM_PKTS_256_TO_512_BYTES, NUM_PKTS_512_TO_1024_BYTES,
+                            NUM_PKTS_1024_TO_1514_BYTES
+
+TCP WINDOWS (2):            TCP_WIN_MAX_IN, TCP_WIN_MAX_OUT
+
+PROTOCOL-SPECIFIC (7):      L7_PROTO, ICMP_TYPE, ICMP_IPV4_TYPE, DNS_QUERY_ID,
+                            DNS_QUERY_TYPE, DNS_TTL_ANSWER, FTP_COMMAND_RET_CODE
+
+TEMPORAL (10):              FLOW_START_MILLISECONDS, FLOW_END_MILLISECONDS,
+                            SRC_TO_DST_IAT_MIN/MAX/AVG/STDDEV,
+                            DST_TO_SRC_IAT_MIN/MAX/AVG/STDDEV
+
+LABELS:                     Attack (binary), Attack_type (category), Label (original)
+    </pre>
+
+    <h2 id="datasets">4. Publicly Accessible NetFlow Datasets via HTTP/HTTPS</h2>
+
+    <h3>Direct HTTP Download (No Auth Required)</h3>
+    <table>
+        <tr><th>Dataset</th><th>Format</th><th>Size</th><th>Direct URL</th><th>Labels</th></tr>
+        <tr>
+            <td><strong>NF-UNSW-NB15-v3</strong></td>
+            <td>CSV</td>
+            <td>~100MB</td>
+            <td><a href="https://rdm.uq.edu.au/files/abd2f5d8-e268-4ff0-84fb-f2f7b3ca3e8f" target="_blank">rdm.uq.edu.au</a></td>
+            <td class="yes">9 types</td>
+        </tr>
+        <tr>
+            <td><strong>NF-ToN-IoT-v3</strong></td>
+            <td>CSV</td>
+            <td>~1GB</td>
+            <td><a href="https://rdm.uq.edu.au/files/343e2e8c-6e6e-4a0c-813d-a46acea1b7f4" target="_blank">rdm.uq.edu.au</a></td>
+            <td class="yes">10 types</td>
+        </tr>
+        <tr>
+            <td><strong>NF-BoT-IoT-v3</strong></td>
+            <td>CSV</td>
+            <td>~500MB</td>
+            <td><a href="https://rdm.uq.edu.au/files/db0187cc-1f78-4215-8e34-303364498866" target="_blank">rdm.uq.edu.au</a></td>
+            <td class="yes">4 types</td>
+        </tr>
+        <tr>
+            <td><strong>NF-CSE-CIC-IDS2018-v3</strong></td>
+            <td>CSV</td>
+            <td>~800MB</td>
+            <td><a href="https://rdm.uq.edu.au/files/4ac221b1-6bd6-42b1-bdf7-03f4fc7efb22" target="_blank">rdm.uq.edu.au</a></td>
+            <td class="yes">6 types</td>
+        </tr>
+        <tr>
+            <td><strong>AIT Netflow</strong></td>
+            <td>CSV (zip)</td>
+            <td>274MB</td>
+            <td><a href="https://zenodo.org/records/6610489" target="_blank">zenodo.org</a></td>
+            <td class="yes">Multi-stage</td>
+        </tr>
+        <tr>
+            <td><strong>CTU-13 Botnet</strong></td>
+            <td>Binetflow</td>
+            <td>~50GB</td>
+            <td><a href="https://mcfp.felk.cvut.cz/publicDatasets/CTU-13-Dataset/" target="_blank">mcfp.felk.cvut.cz</a></td>
+            <td class="yes">Botnet</td>
+        </tr>
+        <tr>
+            <td><strong>MAWI Archive</strong></td>
+            <td>PCAP</td>
+            <td>TB+</td>
+            <td><a href="https://mawi.wide.ad.jp/mawi/" target="_blank">mawi.wide.ad.jp</a></td>
+            <td class="partial">Anomaly</td>
+        </tr>
+        <tr>
+            <td><strong>WRCCDC</strong></td>
+            <td>PCAP</td>
+            <td>1TB+</td>
+            <td><a href="https://archive.wrccdc.org/pcaps/" target="_blank">archive.wrccdc.org</a></td>
+            <td class="partial">CDX</td>
+        </tr>
+        <tr>
+            <td><strong>Netresec Collection</strong></td>
+            <td>PCAP</td>
+            <td>Various</td>
+            <td><a href="https://www.netresec.com/?page=PcapFiles" target="_blank">netresec.com</a></td>
+            <td class="partial">Mixed</td>
+        </tr>
+        <tr>
+            <td><strong>Stratosphere IPS</strong></td>
+            <td>Multiple</td>
+            <td>Various</td>
+            <td><a href="https://www.stratosphereips.org/datasets-overview/" target="_blank">stratosphereips.org</a></td>
+            <td class="yes">Malware</td>
+        </tr>
+    </table>
+
+    <h3>Requires AWS CLI (Public S3, No Auth)</h3>
+    <table>
+        <tr><th>Dataset</th><th>Command</th></tr>
+        <tr>
+            <td><strong>CSE-CIC-IDS2018</strong></td>
+            <td><code>aws s3 sync --no-sign-request "s3://cse-cic-ids2018/" ./data</code></td>
+        </tr>
+    </table>
+    <p>More info: <a href="https://www.unb.ca/cic/datasets/ids-2018.html" target="_blank">www.unb.ca/cic/datasets/ids-2018.html</a></p>
+
+    <h3>Requires Account (Free)</h3>
+    <table>
+        <tr><th>Dataset</th><th>Platform</th><th>Format</th></tr>
+        <tr>
+            <td><strong>NF-UQ-NIDS</strong> (cleaned Parquet)</td>
+            <td><a href="https://www.kaggle.com/datasets/dhoogla/nfuqnids" target="_blank">Kaggle</a></td>
+            <td>Parquet</td>
+        </tr>
+        <tr>
+            <td><strong>UNSW-NB15</strong></td>
+            <td><a href="https://www.kaggle.com/datasets/mrwellsdavid/unsw-nb15" target="_blank">Kaggle</a></td>
+            <td>CSV</td>
+        </tr>
+        <tr>
+            <td><strong>CIC-IDS2017</strong></td>
+            <td><a href="https://www.kaggle.com/datasets/chethuhn/network-intrusion-dataset" target="_blank">Kaggle</a></td>
+            <td>CSV</td>
+        </tr>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2 id="sources">5. Sources</h2>
+
+    <h3>Dataset Repositories</h3>
+    <ul>
+        <li><a href="https://staff.itee.uq.edu.au/marius/NIDS_datasets/" target="_blank">UQ ML-Based NIDS Datasets</a> - Primary source for NF-UNSW-NB15-v3 and related datasets</li>
+        <li><a href="https://zenodo.org/records/6610489" target="_blank">AIT Netflow Dataset (Zenodo)</a> - Labeled synthetic netflows from Austrian Institute of Technology</li>
+        <li><a href="https://www.netresec.com/?page=PcapFiles" target="_blank">Netresec Public PCAP Files</a> - Comprehensive list of public packet capture repositories</li>
+        <li><a href="https://www.stratosphereips.org/datasets-overview/" target="_blank">Stratosphere IPS Datasets</a> - Malware traffic captures with netflow</li>
+        <li><a href="https://mawi.wide.ad.jp/mawi/" target="_blank">MAWI Traffic Archive</a> - Japan backbone traffic since 2006</li>
+        <li><a href="https://www.unb.ca/cic/datasets/ids-2018.html" target="_blank">CSE-CIC-IDS2018 on AWS</a> - Canadian Institute for Cybersecurity dataset</li>
+    </ul>
+
+    <h3>Research Papers</h3>
+    <ul>
+        <li><a href="https://arxiv.org/html/2503.04404v1" target="_blank">Temporal Analysis of NetFlow Datasets (2025)</a> - Details on V3 dataset features</li>
+        <li><a href="https://arxiv.org/abs/2011.09144" target="_blank">NetFlow Datasets for ML-Based NIDS (2020)</a> - Original dataset paper</li>
+    </ul>
+
+    <h3>Incident Response Guides</h3>
+    <ul>
+        <li><a href="https://www.plixer.com/blog/network-forensics-and-incident-response/" target="_blank">Network Forensics and IR Using NetFlow (Plixer)</a></li>
+        <li><a href="https://trustedsec.com/blog/incident-response-rapid-triage-a-dfir-warriors-guide-part-3-network-analysis-and-tooling" target="_blank">IR Rapid Triage: Network Analysis (TrustedSec)</a></li>
+        <li><a href="https://www.sans.org/cyber-security-courses/advanced-network-forensics-threat-hunting-incident-response" target="_blank">FOR572: Advanced Network Forensics (SANS)</a></li>
+    </ul>
+
+    <hr>
+    <p style="font-size: 12px; color: #666; text-align: center;">
+        Report generated by Claude Code | January 12, 2026<br>
+        All URLs verified accessible at time of generation
+    </p>
+</body>
+</html>

@@ -92,7 +92,7 @@ describe('Chat', () => {
     expect(mockOnClose).toHaveBeenCalled()
   })
 
-  it('displays SQL queries in messages when present', () => {
+  it('does NOT display SQL queries to users', () => {
     const messages = [
       {
         id: '1',
@@ -103,7 +103,10 @@ describe('Chat', () => {
       },
     ]
     render(<Chat messages={messages} onSend={mockOnSend} />)
-    expect(screen.getByText(/SELECT \* FROM flows/)).toBeInTheDocument()
+    // SQL should be hidden from users - implementation detail
+    expect(screen.queryByText(/SELECT \* FROM flows/)).not.toBeInTheDocument()
+    // But the response content should still show
+    expect(screen.getByText('Found 100 malicious flows')).toBeInTheDocument()
   })
 
   it('shows suggested pivots when present', () => {

@@ -3,9 +3,13 @@ import { useNetflowData } from '@/hooks/useNetflowData'
 import { ForensicDashboard } from '@/components/forensic/ForensicDashboard'
 import { LandingPage, type CRTLogEntry } from '@/components/landing/LandingPage'
 import { CRTLoadingLog } from '@/components/landing/CRTLoadingLog'
+import { ErrorBoundary } from '@/components/error'
+import { logger } from '@/lib/logger'
 import '@/styles/crt.css'
 
-const DEMO_PARQUET_URL = 'https://pub-d25007b87b76480b851d23d324d67505.r2.dev/NF-UNSW-NB15-v3.parquet'
+const appLogger = logger.child('App')
+
+const DEMO_PARQUET_URL = 'https://pub-d25007b87b76480b851d23d324d67505.r2.dev/UWF-ZeekData24.parquet'
 
 type DataSource =
   | { type: 'none' }
@@ -56,7 +60,14 @@ function App() {
 
   // Landing page - no data source selected
   if (dataSource.type === 'none') {
-    return <LandingPage onDataReady={handleDataReady} />
+    return (
+      <ErrorBoundary
+        context="Landing"
+        onError={(error) => appLogger.error('Landing page error', { error: error.message })}
+      >
+        <LandingPage onDataReady={handleDataReady} />
+      </ErrorBoundary>
+    )
   }
 
   // Loading state - CRT styled
@@ -144,7 +155,14 @@ function App() {
   }
 
   // Main dashboard
-  return <ForensicDashboard />
+  return (
+    <ErrorBoundary
+      context="Dashboard"
+      onError={(error) => appLogger.error('Dashboard error', { error: error.message })}
+    >
+      <ForensicDashboard />
+    </ErrorBoundary>
+  )
 }
 
 export default App
