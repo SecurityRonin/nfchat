@@ -133,6 +133,8 @@ export function ForensicDashboard() {
           whereClause,
           limit: pageSize,
           offset: currentPage * pageSize,
+          // Deduplicate by 5-tuple when filtering by session (same flow may have multiple tactic labels)
+          deduplicate: !!selectedSession,
         })
 
         if (!cancelled) {

@@ -295,18 +295,24 @@ export async function getDashboardData(options?: {
 /**
  * Get flows with pagination (lightweight - no aggregations).
  * Use this for page navigation and filter changes.
+ *
+ * @param options.deduplicate - When true, deduplicates flows by 5-tuple
+ *   (src_ip, src_port, dst_ip, dst_port, protocol), aggregating Attack labels.
+ *   Useful for session filtering where the same flow has multiple tactic labels.
  */
 export async function getFlows(options?: {
   whereClause?: string
   limit?: number
   offset?: number
+  deduplicate?: boolean
 }): Promise<{ flows: Record<string, unknown>[]; totalCount: number }> {
-  const { whereClause = '1=1', limit = 50, offset = 0 } = options ?? {}
+  const { whereClause = '1=1', limit = 50, offset = 0, deduplicate = false } = options ?? {}
 
   const response = await apiPost<FlowsResponse>('/api/motherduck/flows', {
     whereClause,
     limit,
     offset,
+    deduplicate,
   })
 
   if (!response.data) {

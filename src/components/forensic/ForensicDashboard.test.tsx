@@ -311,5 +311,50 @@ describe('ForensicDashboard', () => {
         expect(whereClause).toContain('FLOW_END_MILLISECONDS <=')
       })
     })
+
+    it('deduplicates flows by 5-tuple when session is selected', async () => {
+      render(<ForensicDashboard />)
+
+      // Toggle kill chain view
+      await act(async () => {
+        const killChainButton = screen.getByText(/Kill Chain/)
+        killChainButton.click()
+      })
+
+      await waitFor(() => {
+        expect(capturedKillChainProps.onSessionSelect).toBeDefined()
+      })
+
+      // Clear previous calls
+      mockGetFlows.mockClear()
+
+      // Simulate session selection
+      const mockSession = {
+        session_id: '143.88.4.11-12345',
+        src_ip: '143.88.4.11',
+        start_time: 1711612000000,
+        end_time: 1711612060000,
+        duration_minutes: 1,
+        flow_count: 4,
+        tactics: ['Initial Access', 'Defense Evasion', 'Persistence', 'Privilege Escalation'],
+        techniques: ['T1190'],
+        target_ips: ['143.88.5.12'],
+        target_ports: [445],
+        total_bytes: 0,
+      }
+
+      await act(async () => {
+        const onSessionSelect = capturedKillChainProps.onSessionSelect as (session: typeof mockSession) => void
+        onSessionSelect(mockSession)
+      })
+
+      // Should request deduplication when filtering by session
+      await waitFor(() => {
+        const calls = mockGetFlows.mock.calls
+        expect(calls.length).toBeGreaterThan(0)
+        const lastCall = calls[calls.length - 1]
+        expect(lastCall[0]?.deduplicate).toBe(true)
+      })
+    })
   })
 })

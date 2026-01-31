@@ -380,11 +380,17 @@ export async function handleGetDashboardData(
 /**
  * Get just flows with pagination (fast - no aggregations).
  * Used for page navigation and filter changes.
+ *
+ * When deduplicate=true, flows are deduplicated by 5-tuple (src_ip, src_port,
+ * dst_ip, dst_port, protocol) and Attack labels are aggregated. This is useful
+ * for session filtering where the UWF dataset has the same flow labeled with
+ * multiple MITRE tactics.
  */
 export interface GetFlowsRequest {
   whereClause?: string
   limit?: number
   offset?: number
+  deduplicate?: boolean
 }
 
 export interface GetFlowsResponse {
@@ -399,29 +405,59 @@ export interface GetFlowsResponse {
 export async function handleGetFlows(
   req: GetFlowsRequest
 ): Promise<GetFlowsResponse> {
-  const { whereClause = '1=1', limit = 50, offset = 0 } = req
+  const { whereClause = '1=1', limit = 50, offset = 0, deduplicate = false } = req
 
   if (!getToken()) {
     return { success: false, error: 'MotherDuck token not configured' }
   }
 
   try {
-    // Run flows query and count in parallel
-    const [flows, countResult] = await Promise.all([
-      executeQuery<Record<string, unknown>>(`
+    // Build flow query - optionally deduplicate by 5-tuple
+    const flowQuery = deduplicate
+      ? `
+        WITH ranked AS (
+          SELECT *,
+            STRING_AGG(DISTINCT Attack, ', ') OVER (
+              PARTITION BY IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL
+            ) as Attack_Combined,
+            ROW_NUMBER() OVER (
+              PARTITION BY IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL
+              ORDER BY FLOW_START_MILLISECONDS
+            ) as rn
+          FROM flows
+          WHERE ${whereClause}
+        )
+        SELECT * EXCLUDE (rn, Attack), Attack_Combined as Attack
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY FLOW_START_MILLISECONDS DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `
+      : `
         SELECT *
         FROM flows
         WHERE ${whereClause}
         ORDER BY FLOW_START_MILLISECONDS DESC
         LIMIT ${limit}
         OFFSET ${offset}
-      `),
-      // Use approximate count for filtered queries (much faster)
-      whereClause === '1=1'
-        ? executeQuery<{ cnt: number | bigint }>(`SELECT cnt FROM mv_total_count`)
-        : executeQuery<{ cnt: number | bigint }>(`
-            SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}
-          `),
+      `
+
+    // Build count query - count unique flows when deduplicating
+    const countQuery = deduplicate
+      ? `
+        SELECT COUNT(DISTINCT (IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL)) as cnt
+        FROM flows
+        WHERE ${whereClause}
+      `
+      : whereClause === '1=1'
+        ? `SELECT cnt FROM mv_total_count`
+        : `SELECT COUNT(*) as cnt FROM flows WHERE ${whereClause}`
+
+    // Run flows query and count in parallel
+    const [flows, countResult] = await Promise.all([
+      executeQuery<Record<string, unknown>>(flowQuery),
+      executeQuery<{ cnt: number | bigint }>(countQuery),
     ])
 
     return {
