@@ -23,7 +23,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     diagnostics.tokenPrefix = token?.substring(0, 10) + '...'
 
     // Try to require the module
-    // @ts-expect-error - duckdb-lambda-x86 has no types
     const duckdb = await import('duckdb-lambda-x86')
     diagnostics.moduleLoaded = true
 

@@ -11,7 +11,6 @@ if (!process.env.HOME) {
   process.env.HOME = '/tmp'
 }
 
-// @ts-expect-error - duckdb-lambda-x86 has same API as duckdb but no types
 import duckdb from 'duckdb-lambda-x86'
 
 // Singleton database
