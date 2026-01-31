@@ -415,21 +415,32 @@ export async function handleGetFlows(
     // Build flow query - optionally deduplicate by 5-tuple
     const flowQuery = deduplicate
       ? `
-        WITH ranked AS (
-          SELECT *,
-            STRING_AGG(DISTINCT Attack, ', ') OVER (
-              PARTITION BY IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL
-            ) as Attack_Combined,
-            ROW_NUMBER() OVER (
-              PARTITION BY IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL
-              ORDER BY FLOW_START_MILLISECONDS
-            ) as rn
+        WITH aggregated AS (
+          SELECT
+            IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL,
+            STRING_AGG(DISTINCT Attack, ', ' ORDER BY Attack) as Attack,
+            MIN(FLOW_START_MILLISECONDS) as FLOW_START_MILLISECONDS,
+            MAX(FLOW_END_MILLISECONDS) as FLOW_END_MILLISECONDS,
+            SUM(FLOW_DURATION_MILLISECONDS) as FLOW_DURATION_MILLISECONDS,
+            MAX(Label) as Label,
+            STRING_AGG(DISTINCT MITRE_TACTIC, ', ' ORDER BY MITRE_TACTIC) as MITRE_TACTIC,
+            STRING_AGG(DISTINCT MITRE_TECHNIQUE, ', ' ORDER BY MITRE_TECHNIQUE) FILTER (WHERE MITRE_TECHNIQUE != '') as MITRE_TECHNIQUE,
+            MAX(CONN_STATE) as CONN_STATE,
+            MAX(SERVICE) as SERVICE,
+            MAX(COMMUNITY_ID) as COMMUNITY_ID,
+            SUM(IN_BYTES) as IN_BYTES,
+            SUM(OUT_BYTES) as OUT_BYTES,
+            SUM(IN_PKTS) as IN_PKTS,
+            SUM(OUT_PKTS) as OUT_PKTS,
+            MAX(L7_PROTO) as L7_PROTO,
+            MAX(TCP_FLAGS) as TCP_FLAGS,
+            MAX(MIN_TTL) as MIN_TTL,
+            MAX(MAX_TTL) as MAX_TTL
           FROM flows
           WHERE ${whereClause}
+          GROUP BY IPV4_SRC_ADDR, L4_SRC_PORT, IPV4_DST_ADDR, L4_DST_PORT, PROTOCOL
         )
-        SELECT * EXCLUDE (rn, Attack), Attack_Combined as Attack
-        FROM ranked
-        WHERE rn = 1
+        SELECT * FROM aggregated
         ORDER BY FLOW_START_MILLISECONDS DESC
         LIMIT ${limit}
         OFFSET ${offset}
