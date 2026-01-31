@@ -39,6 +39,8 @@ export async function initMotherDuck(): Promise<MDConnection> {
 
   try {
     await Promise.race([initPromise, timeoutPromise]);
+    // Set default database to my_db where flows table lives
+    await connection.evaluateQuery('USE my_db');
     console.log('[MotherDuck] Connection initialized successfully');
   } catch (err) {
     connection = null;
