@@ -117,7 +117,7 @@ export async function getAttackSessions(
 ): Promise<AttackSession[]> {
   const windowMs = sessionWindowMinutes * 60 * 1000;
 
-  return executeQuery(`
+  const results = await executeQuery<AttackSession>(`
     WITH sessions AS (
       SELECT
         IPV4_SRC_ADDR as src_ip,
@@ -151,6 +151,15 @@ export async function getAttackSessions(
     ORDER BY start_time DESC
     LIMIT ${limit}
   `);
+
+  // Ensure array fields are proper JavaScript arrays
+  return results.map(session => ({
+    ...session,
+    tactics: Array.isArray(session.tactics) ? session.tactics : Array.from(session.tactics || []),
+    techniques: Array.isArray(session.techniques) ? session.techniques : Array.from(session.techniques || []),
+    target_ips: Array.isArray(session.target_ips) ? session.target_ips : Array.from(session.target_ips || []),
+    target_ports: Array.isArray(session.target_ports) ? session.target_ports : Array.from(session.target_ports || []),
+  }));
 }
 
 /**
@@ -162,7 +171,7 @@ export async function getKillChainPhases(
   startTime: number,
   endTime: number
 ): Promise<KillChainPhase[]> {
-  return executeQuery(`
+  const results = await executeQuery<KillChainPhase>(`
     SELECT
       '${srcIp}' as session_id,
       IPV4_SRC_ADDR as src_ip,
@@ -181,6 +190,12 @@ export async function getKillChainPhases(
     GROUP BY MITRE_TACTIC, MITRE_TECHNIQUE
     ORDER BY phase_start ASC
   `);
+
+  // Ensure array fields are proper JavaScript arrays
+  return results.map(phase => ({
+    ...phase,
+    target_ips: Array.isArray(phase.target_ips) ? phase.target_ips : Array.from(phase.target_ips || []),
+  }));
 }
 
 /**
