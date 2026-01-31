@@ -174,7 +174,7 @@ export async function getKillChainPhases(
   const results = await executeQuery<KillChainPhase>(`
     SELECT
       '${srcIp}' as session_id,
-      IPV4_SRC_ADDR as src_ip,
+      '${srcIp}' as src_ip,
       MITRE_TACTIC as tactic,
       MITRE_TECHNIQUE as technique,
       MIN(FLOW_START_MILLISECONDS) as phase_start,
