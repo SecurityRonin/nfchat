@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createTraceContext, formatDuration, type TraceContext } from '../context';
+import { createTraceContext, formatDuration } from '../context';
 
 describe('TraceContext', () => {
   beforeEach(() => {

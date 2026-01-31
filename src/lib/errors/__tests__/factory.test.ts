@@ -4,7 +4,6 @@ import {
   Errors,
   isAppError,
   ErrorCodes,
-  type AppError,
 } from '../index';
 
 describe('Error Factory', () => {

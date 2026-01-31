@@ -69,7 +69,7 @@ export function ForensicDashboard() {
 
   // Kill Chain Timeline panel state
   const [showKillChain, setShowKillChain] = useState(false)
-  const [selectedSession, setSelectedSession] = useState<AttackSession | null>(null)
+  const [_selectedSession, setSelectedSession] = useState<AttackSession | null>(null)
 
   // Store state
   const hideBenign = useStore((s) => s.hideBenign)

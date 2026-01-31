@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RequestManager, createRequestManager } from '../manager';
+import { createRequestManager, type RequestManager } from '../manager';
 
 describe('RequestManager', () => {
   let manager: RequestManager;

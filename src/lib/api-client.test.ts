@@ -147,7 +147,7 @@ describe('API Client', () => {
         json: async () => ({ success: false, error: 'Server error' }),
       })
 
-      const { loadDataFromUrl, ApiError, isApiError } = await import('./api-client')
+      const { loadDataFromUrl, isApiError } = await import('./api-client')
 
       try {
         await loadDataFromUrl('https://example.com/data.parquet')

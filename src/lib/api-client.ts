@@ -76,9 +76,12 @@ interface ChatAnalyzeResponse {
  * Wraps an AppError with additional context.
  */
 export class ApiError extends Error {
-  constructor(public readonly appError: AppError) {
+  public readonly appError: AppError
+
+  constructor(appError: AppError) {
     super(appError.message)
     this.name = 'ApiError'
+    this.appError = appError
   }
 
   /**
