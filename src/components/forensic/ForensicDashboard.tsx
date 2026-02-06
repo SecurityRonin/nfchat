@@ -6,7 +6,7 @@ import { FlowTable } from '../dashboard/FlowTable'
 import { StatsBar } from './StatsBar'
 import { logger } from '@/lib/logger'
 import { WhereClauseBuilder } from '@/lib/sql'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { ColumnFiltersState } from '@tanstack/react-table'
 import type { AttackSession } from '@/lib/motherduck/types'
 
