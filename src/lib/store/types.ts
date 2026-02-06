@@ -123,9 +123,58 @@ export interface UIActions {
 
 export type UISlice = UIState & UIActions;
 
+// HMM state slice
+export interface StateProfile {
+  stateId: number
+  flowCount: number
+  avgInBytes: number
+  avgOutBytes: number
+  bytesRatio: number
+  avgDurationMs: number
+  avgPktsPerSec: number
+  protocolDist: { tcp: number; udp: number; icmp: number }
+  portCategoryDist: { wellKnown: number; registered: number; ephemeral: number }
+  suggestedTactic: string
+  suggestedConfidence: number
+}
+
+export interface HmmState {
+  hmmStates: StateProfile[]
+  hmmTraining: boolean
+  hmmProgress: number
+  hmmError: string | null
+  tacticAssignments: Record<number, string>
+  expandedState: number | null
+}
+
+export interface HmmActions {
+  setHmmStates: (states: StateProfile[]) => void
+  setHmmTraining: (training: boolean) => void
+  setHmmProgress: (progress: number) => void
+  setHmmError: (error: string | null) => void
+  setTacticAssignment: (stateId: number, tactic: string) => void
+  setExpandedState: (stateId: number | null) => void
+  resetHmm: () => void
+}
+
+export type HmmSlice = HmmState & HmmActions;
+
+// View slice
+export interface ViewState {
+  activeView: 'dashboard' | 'stateExplorer'
+}
+
+export interface ViewActions {
+  setActiveView: (view: 'dashboard' | 'stateExplorer') => void
+}
+
+export type ViewSlice = ViewState & ViewActions;
+
 // Combined app state
 export type AppState = FilterSlice &
   PaginationSlice &
   ChatSlice &
   DataSlice &
-  UISlice;
+  UISlice &
+  HmmSlice &
+  ViewSlice;

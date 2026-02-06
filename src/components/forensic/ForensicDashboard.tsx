@@ -6,12 +6,14 @@ import { FlowTable } from '../dashboard/FlowTable'
 import { StatsBar } from './StatsBar'
 import { logger } from '@/lib/logger'
 import { WhereClauseBuilder } from '@/lib/sql'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import type { ColumnFiltersState } from '@tanstack/react-table'
 import type { AttackSession } from '@/lib/motherduck/types'
 
 // Lazy load heavy components - Chat pulls in react-markdown, KillChainTimeline is complex
 const Chat = lazy(() => import('../Chat').then(m => ({ default: m.Chat })))
 const KillChainTimeline = lazy(() => import('./KillChainTimeline').then(m => ({ default: m.KillChainTimeline })))
+const StateExplorer = lazy(() => import('./StateExplorer').then(m => ({ default: m.StateExplorer })))
 
 const dashboardLogger = logger.child('Dashboard')
 
@@ -89,6 +91,10 @@ export function ForensicDashboard() {
   const currentPage = useStore((s) => s.currentPage)
   const messages = useStore((s) => s.messages)
   const isLoading = useStore((s) => s.isLoading)
+
+  // View state
+  const activeView = useStore((s) => s.activeView)
+  const setActiveView = useStore((s) => s.setActiveView)
 
   // Store actions - individual selectors for stable references
   const addMessage = useStore((s) => s.addMessage)
@@ -256,63 +262,83 @@ export function ForensicDashboard() {
       data-testid="forensic-dashboard"
       className="flex flex-col h-screen bg-background"
     >
-      {/* Header */}
+      {/* Header with view tabs */}
       <header className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <h1 className="text-lg font-semibold">nfchat</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowKillChain(!showKillChain)}
-            className={`px-3 py-1 text-sm rounded border transition-colors ${
-              showKillChain
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border hover:bg-muted'
-            }`}
-          >
-            {showKillChain ? '✕ Kill Chain' : '⚔ Kill Chain'}
-          </button>
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold">nfchat</h1>
+          <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'dashboard' | 'stateExplorer')}>
+            <TabsList>
+              <TabsTrigger value="dashboard">Flows</TabsTrigger>
+              <TabsTrigger value="stateExplorer">State Explorer</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
+        {activeView === 'dashboard' && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowKillChain(!showKillChain)}
+              className={`px-3 py-1 text-sm rounded border transition-colors ${
+                showKillChain
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border hover:bg-muted'
+              }`}
+            >
+              {showKillChain ? '✕ Kill Chain' : '⚔ Kill Chain'}
+            </button>
+          </div>
+        )}
       </header>
 
-      {/* Stats Bar */}
-      <StatsBar onFilter={handleCellClick} />
+      {activeView === 'dashboard' ? (
+        <>
+          {/* Stats Bar */}
+          <StatsBar onFilter={handleCellClick} />
 
-      {/* Split View: Table + Chat */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left: Flow Table (65%) */}
-        <div ref={tableContainerRef} className="w-[65%] border-r border-border overflow-hidden">
-          <FlowTable
-            data={pageFlows}
-            loading={pageLoading}
-            error={pageError}
-            onRetry={() => setCurrentPage(currentPage)}
-            totalCount={filteredTotalCount}
-            onCellClick={handleCellClick}
-            currentPage={currentPage}
-            totalPages={displayedTotalPages}
-            onPageChange={setCurrentPage}
-            columnFilters={columnFilters}
-            onColumnFiltersChange={handleColumnFiltersChange}
-          />
-        </div>
+          {/* Split View: Table + Chat */}
+          <div className="flex flex-1 min-h-0">
+            {/* Left: Flow Table (65%) */}
+            <div ref={tableContainerRef} className="w-[65%] border-r border-border overflow-hidden">
+              <FlowTable
+                data={pageFlows}
+                loading={pageLoading}
+                error={pageError}
+                onRetry={() => setCurrentPage(currentPage)}
+                totalCount={filteredTotalCount}
+                onCellClick={handleCellClick}
+                currentPage={currentPage}
+                totalPages={displayedTotalPages}
+                onPageChange={setCurrentPage}
+                columnFilters={columnFilters}
+                onColumnFiltersChange={handleColumnFiltersChange}
+              />
+            </div>
 
-        {/* Right: Chat or Kill Chain Panel (35%) */}
-        <div className="w-[35%] overflow-hidden flex flex-col">
+            {/* Right: Chat or Kill Chain Panel (35%) */}
+            <div className="w-[35%] overflow-hidden flex flex-col">
+              <Suspense fallback={<PanelLoadingFallback />}>
+                {showKillChain ? (
+                  <KillChainTimeline
+                    onSessionSelect={handleSessionSelect}
+                    className="h-full"
+                  />
+                ) : (
+                  <Chat
+                    messages={messages}
+                    onSend={handleChatSend}
+                    isLoading={isLoading}
+                  />
+                )}
+              </Suspense>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-auto">
           <Suspense fallback={<PanelLoadingFallback />}>
-            {showKillChain ? (
-              <KillChainTimeline
-                onSessionSelect={handleSessionSelect}
-                className="h-full"
-              />
-            ) : (
-              <Chat
-                messages={messages}
-                onSend={handleChatSend}
-                isLoading={isLoading}
-              />
-            )}
+            <StateExplorer />
           </Suspense>
         </div>
-      </div>
+      )}
     </div>
   )
 }

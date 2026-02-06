@@ -4,6 +4,8 @@ import { createPaginationSlice } from './paginationSlice';
 import { createChatSlice } from './chatSlice';
 import { createDataSlice } from './dataSlice';
 import { createUISlice } from './uiSlice';
+import { createHmmSlice } from './hmmSlice';
+import { createViewSlice } from './viewSlice';
 import { buildWhereClause, selectFilteredFlows, selectDashboardState, selectChatState } from './selectors';
 import type { AppState } from './types';
 
@@ -14,6 +16,9 @@ export type {
   ChatMessage,
   AttackBreakdownData,
   TopTalkerData,
+  StateProfile,
+  HmmSlice,
+  ViewSlice,
 } from './types';
 
 // Re-export selectors
@@ -30,4 +35,6 @@ export const useStore = create<AppState>()((...args) => ({
   ...createChatSlice(...args),
   ...createDataSlice(...args),
   ...createUISlice(...args),
+  ...createHmmSlice(...args),
+  ...createViewSlice(...args),
 }));

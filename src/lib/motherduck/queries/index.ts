@@ -11,3 +11,24 @@ export {
   getMitreTacticDistribution,
   getMitreTechniqueDistribution,
 } from './aggregations';
+export {
+  extractFeatures,
+  getStateSignatures,
+  getSampleFlows,
+  getStateTopHosts,
+  getStateTimeline,
+  getStateConnStates,
+  getStatePortServices,
+  writeStateAssignments,
+  updateStateTactic,
+  ensureHmmStateColumn,
+} from './hmm';
+export type {
+  FlowFeatureRow,
+  StateSignatureRow,
+  HostCount,
+  TimelineBucket,
+  ConnStateCount,
+  PortCount,
+  ServiceCount,
+} from './hmm';
