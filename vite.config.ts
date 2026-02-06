@@ -27,6 +27,10 @@ export default defineConfig({
     },
   },
   server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
     fs: {
       // Allow serving files from datasets folder during development
       allow: ['..'],
