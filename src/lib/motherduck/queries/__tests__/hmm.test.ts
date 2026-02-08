@@ -24,6 +24,8 @@ import {
   writeStateAssignments,
   updateStateTactic,
   ensureHmmStateColumn,
+  getStateTransitions,
+  getStateTemporalDist,
 } from '../hmm';
 import type {
   FlowFeatureRow,
@@ -33,6 +35,8 @@ import type {
   ConnStateCount,
   PortCount,
   ServiceCount,
+  StateTransition,
+  TemporalBucket,
 } from '../hmm';
 
 const mockExecuteQuery = vi.mocked(executeQuery);
@@ -337,6 +341,58 @@ describe('HMM Query Module', () => {
     });
   });
 
+  describe('getStateTransitions', () => {
+    it('generates SQL with LEAD window function for sequential transitions', async () => {
+      await getStateTransitions();
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+      const sql = mockExecuteQuery.mock.calls[0][0];
+
+      expect(sql).toContain('LEAD(HMM_STATE) OVER (ORDER BY FLOW_START_MILLISECONDS)');
+      expect(sql).toContain('HMM_STATE IS NOT NULL');
+      expect(sql).toContain('next_state IS NOT NULL');
+      expect(sql).toContain('GROUP BY');
+      expect(sql).toContain('ORDER BY count DESC');
+    });
+
+    it('returns typed StateTransition results', async () => {
+      const mockRows: StateTransition[] = [
+        { fromState: 0, toState: 1, count: 50 },
+        { fromState: 1, toState: 0, count: 30 },
+      ];
+      mockExecuteQuery.mockResolvedValueOnce(mockRows);
+
+      const result = await getStateTransitions();
+      expect(result).toEqual(mockRows);
+    });
+  });
+
+  describe('getStateTemporalDist', () => {
+    it('generates SQL with time_bucket for hourly distribution', async () => {
+      await getStateTemporalDist();
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+      const sql = mockExecuteQuery.mock.calls[0][0];
+
+      expect(sql).toContain('time_bucket');
+      expect(sql).toContain('INTERVAL');
+      expect(sql).toContain('1 hour');
+      expect(sql).toContain('HMM_STATE IS NOT NULL');
+      expect(sql).toContain('GROUP BY');
+      expect(sql).toContain('ORDER BY bucket');
+    });
+
+    it('returns typed TemporalBucket results', async () => {
+      const mockRows: TemporalBucket[] = [
+        { bucket: '2024-01-01 00:00:00', stateId: 0, count: 100 },
+        { bucket: '2024-01-01 00:00:00', stateId: 1, count: 50 },
+        { bucket: '2024-01-01 01:00:00', stateId: 0, count: 75 },
+      ];
+      mockExecuteQuery.mockResolvedValueOnce(mockRows);
+
+      const result = await getStateTemporalDist();
+      expect(result).toEqual(mockRows);
+    });
+  });
+
   describe('type exports', () => {
     it('exports all required interfaces', () => {
       // These imports would fail at compile time if the types were not exported
@@ -388,6 +444,12 @@ describe('HMM Query Module', () => {
 
       const service: ServiceCount = { service: '', count: 0 };
       expect(service).toBeDefined();
+
+      const transition: StateTransition = { fromState: 0, toState: 1, count: 0 };
+      expect(transition).toBeDefined();
+
+      const temporal: TemporalBucket = { bucket: '', stateId: 0, count: 0 };
+      expect(temporal).toBeDefined();
     });
   });
 });

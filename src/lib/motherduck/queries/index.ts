@@ -22,6 +22,8 @@ export {
   writeStateAssignments,
   updateStateTactic,
   ensureHmmStateColumn,
+  getStateTransitions,
+  getStateTemporalDist,
 } from './hmm';
 export type {
   FlowFeatureRow,
@@ -31,4 +33,6 @@ export type {
   ConnStateCount,
   PortCount,
   ServiceCount,
+  StateTransition,
+  TemporalBucket,
 } from './hmm';

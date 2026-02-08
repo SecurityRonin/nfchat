@@ -78,6 +78,20 @@ export interface ServiceCount {
   count: number;
 }
 
+/** State-to-state transition with occurrence count. */
+export interface StateTransition {
+  fromState: number;
+  toState: number;
+  count: number;
+}
+
+/** Time-bucketed per-state flow count. */
+export interface TemporalBucket {
+  bucket: string;
+  stateId: number;
+  count: number;
+}
+
 // ---------------------------------------------------------------------------
 // Batch size for bulk writes
 // ---------------------------------------------------------------------------
@@ -395,5 +409,52 @@ export async function updateStateTactic(
 export async function ensureHmmStateColumn(): Promise<void> {
   await executeQuery(`
     ALTER TABLE flows ADD COLUMN IF NOT EXISTS HMM_STATE INTEGER
+  `);
+}
+
+// ---------------------------------------------------------------------------
+// 11. getStateTransitions
+// ---------------------------------------------------------------------------
+
+/**
+ * Get state-to-state transition counts using LEAD window function.
+ *
+ * Counts how often each (from_state, to_state) pair occurs in
+ * time-ordered flow data.
+ */
+export async function getStateTransitions(): Promise<StateTransition[]> {
+  return executeQuery<StateTransition>(`
+    WITH ordered AS (
+      SELECT HMM_STATE,
+             LEAD(HMM_STATE) OVER (ORDER BY FLOW_START_MILLISECONDS) AS next_state
+      FROM flows
+      WHERE HMM_STATE IS NOT NULL
+    )
+    SELECT HMM_STATE AS "fromState", next_state AS "toState", COUNT(*) AS count
+    FROM ordered
+    WHERE next_state IS NOT NULL
+    GROUP BY HMM_STATE, next_state
+    ORDER BY count DESC
+  `);
+}
+
+// ---------------------------------------------------------------------------
+// 12. getStateTemporalDist
+// ---------------------------------------------------------------------------
+
+/**
+ * Get hourly temporal distribution of states.
+ *
+ * Returns per-hour, per-state flow counts for visualizing
+ * how state activity varies over time.
+ */
+export async function getStateTemporalDist(): Promise<TemporalBucket[]> {
+  return executeQuery<TemporalBucket>(`
+    SELECT time_bucket(INTERVAL '1 hour', to_timestamp(FLOW_START_MILLISECONDS / 1000.0)) AS bucket,
+           HMM_STATE AS "stateId", COUNT(*) AS count
+    FROM flows
+    WHERE HMM_STATE IS NOT NULL
+    GROUP BY bucket, "stateId"
+    ORDER BY bucket
   `);
 }

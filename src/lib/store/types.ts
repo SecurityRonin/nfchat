@@ -136,6 +136,8 @@ export interface StateProfile {
   portCategoryDist: { wellKnown: number; registered: number; ephemeral: number }
   suggestedTactic: string
   suggestedConfidence: number
+  anomalyScore?: number
+  anomalyFactors?: string[]
 }
 
 export interface HmmState {

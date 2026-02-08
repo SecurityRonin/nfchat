@@ -1,13 +1,12 @@
-import { memo, useEffect, useState } from 'react'
-import { ATTACK_COLORS } from '@/lib/schema'
+import { memo } from 'react'
 import { useStore } from '@/lib/store'
-import { getSampleFlows, getStateTopHosts, getStateTimeline, getStateConnStates, getStatePortServices } from '@/lib/motherduck/queries'
+import { useStateDetails } from '@/hooks/useStateDetails'
+import { formatBytes, formatDuration, getTacticColor } from '@/lib/formatting/traffic'
 import { TacticSelector } from './TacticSelector'
 import { MiniTimeline } from './MiniTimeline'
 import { FlowPreview } from './FlowPreview'
+import { generateNarrative } from '@/lib/hmm/narrative'
 import type { StateProfile } from '@/lib/store/types'
-import type { FlowRecord } from '@/lib/schema'
-import type { HostCount, TimelineBucket, ConnStateCount, PortCount, ServiceCount } from '@/lib/motherduck/queries/hmm'
 
 interface StateCardProps {
   state: StateProfile
@@ -15,18 +14,8 @@ interface StateCardProps {
   onTacticAssign: (stateId: number, tactic: string) => void
   expanded: boolean
   onToggleExpand: () => void
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)}MB`
-  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)}KB`
-  return `${Math.round(bytes)}B`
-}
-
-function formatDuration(ms: number): string {
-  if (ms >= 60_000) return `${(ms / 60_000).toFixed(1)}m`
-  if (ms >= 1_000) return `${(ms / 1_000).toFixed(1)}s`
-  return `${Math.round(ms)}ms`
+  selectedForComparison?: boolean
+  onToggleCompare?: () => void
 }
 
 function PercentBar({ label, value }: { label: string; value: number }) {
@@ -51,58 +40,13 @@ export const StateCard = memo(function StateCard({
   onTacticAssign,
   expanded,
   onToggleExpand,
+  selectedForComparison = false,
+  onToggleCompare,
 }: StateCardProps) {
-  const [sampleFlows, setSampleFlows] = useState<Partial<FlowRecord>[]>([])
-  const [flowsLoading, setFlowsLoading] = useState(false)
-  const [topHosts, setTopHosts] = useState<{ srcHosts: HostCount[]; dstHosts: HostCount[] }>({ srcHosts: [], dstHosts: [] })
-  const [timeline, setTimeline] = useState<TimelineBucket[]>([])
-  const [connStates, setConnStates] = useState<ConnStateCount[]>([])
-  const [portServices, setPortServices] = useState<{ ports: PortCount[]; services: ServiceCount[] }>({ ports: [], services: [] })
+  const { topHosts, timeline, connStates, portServices, sampleFlows, loading: flowsLoading } = useStateDetails(state.stateId, expanded)
 
   const currentTactic = assignedTactic ?? state.suggestedTactic
-  const tacticColor = ATTACK_COLORS[currentTactic] || '#71717a'
-
-  // Load detail data when expanded
-  useEffect(() => {
-    if (!expanded) return
-    let cancelled = false
-
-    async function loadDetails() {
-      const [hosts, tl, cs, ps] = await Promise.all([
-        getStateTopHosts(state.stateId),
-        getStateTimeline(state.stateId),
-        getStateConnStates(state.stateId),
-        getStatePortServices(state.stateId),
-      ])
-      if (!cancelled) {
-        setTopHosts(hosts)
-        setTimeline(tl)
-        setConnStates(cs)
-        setPortServices(ps)
-      }
-    }
-
-    loadDetails()
-    return () => { cancelled = true }
-  }, [expanded, state.stateId])
-
-  // Load sample flows when expanded
-  useEffect(() => {
-    if (!expanded) return
-    let cancelled = false
-
-    async function loadFlows() {
-      setFlowsLoading(true)
-      const flows = await getSampleFlows(state.stateId)
-      if (!cancelled) {
-        setSampleFlows(flows)
-        setFlowsLoading(false)
-      }
-    }
-
-    loadFlows()
-    return () => { cancelled = true }
-  }, [expanded, state.stateId])
+  const tacticColor = getTacticColor(currentTactic)
 
   return (
     <div
@@ -116,6 +60,20 @@ export const StateCard = memo(function StateCard({
           <span className="text-xs text-muted-foreground">
             {state.flowCount.toLocaleString()} flows
           </span>
+          {state.anomalyScore !== undefined && state.anomalyScore > 0 && (
+            <span
+              className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                state.anomalyScore >= 80
+                  ? 'bg-red-500/20 text-red-700 dark:text-red-400'
+                  : state.anomalyScore >= 50
+                  ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                  : 'bg-green-500/20 text-green-700 dark:text-green-400'
+              }`}
+              title={state.anomalyFactors?.join(', ') || 'Anomaly detected'}
+            >
+              ⚠ {state.anomalyScore}
+            </span>
+          )}
           <button
             className="text-xs text-primary hover:underline"
             onClick={() => {
@@ -125,6 +83,19 @@ export const StateCard = memo(function StateCard({
           >
             View Flows →
           </button>
+          {onToggleCompare && (
+            <button
+              className={`text-xs px-2 py-0.5 rounded border ${
+                selectedForComparison
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border hover:bg-accent'
+              }`}
+              onClick={onToggleCompare}
+              title={selectedForComparison ? 'Remove from comparison' : 'Add to comparison'}
+            >
+              {selectedForComparison ? '✓ Compare' : 'Compare'}
+            </button>
+          )}
         </div>
         <TacticSelector
           stateId={state.stateId}
@@ -134,6 +105,11 @@ export const StateCard = memo(function StateCard({
           onAssign={onTacticAssign}
         />
       </div>
+
+      {/* Narrative Summary */}
+      <p className="text-xs text-muted-foreground italic mb-3">
+        {generateNarrative(state)}
+      </p>
 
       {/* Traffic Profile */}
       <div className="grid grid-cols-3 gap-2 mb-3 text-xs">

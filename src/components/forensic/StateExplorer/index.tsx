@@ -1,12 +1,18 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
+import { useStateGrid } from '@/hooks/useStateGrid'
+import { discoverStates } from '@/lib/hmm/discovery-service'
 import { DiscoveryControls } from './DiscoveryControls'
+import { StateSummaryBar } from './StateSummaryBar'
+import { StateTransitions } from './StateTransitions'
+import { StateTemporal } from './StateTemporal'
 import { StateCard } from './StateCard'
-import { extractFeatures, ensureHmmStateColumn, writeStateAssignments, getStateSignatures, updateStateTactic } from '@/lib/motherduck/queries'
-import { suggestTactic } from '@/lib/hmm'
-import { trainInWorker } from '@/lib/hmm/worker-bridge'
+import { StateComparison } from './StateComparison'
+import { StateGridControls } from './StateGridControls'
+import { ErrorBoundary } from '@/components/error/ErrorBoundary'
+import { updateStateTactic, getStateTransitions, getStateTemporalDist } from '@/lib/motherduck/queries'
+import type { StateTransition, TemporalBucket } from '@/lib/motherduck/queries/hmm'
 import { logger } from '@/lib/logger'
-import type { StateProfile } from '@/lib/store/types'
 
 const stateExplorerLogger = logger.child('StateExplorer')
 
@@ -21,17 +27,25 @@ export function StateExplorer() {
   const hmmProgress = useStore((s) => s.hmmProgress)
   const hmmError = useStore((s) => s.hmmError)
   const tacticAssignments = useStore((s) => s.tacticAssignments)
-  const expandedState = useStore((s) => s.expandedState)
+  const hmmConverged = useStore((s) => s.hmmConverged)
+  const hmmIterations = useStore((s) => s.hmmIterations)
+
+  const [expandedState, setExpandedState] = useState<number | null>(null)
+  const expandedStateRef = useRef<number | null>(null)
+
+  const [transitions, setTransitions] = useState<StateTransition[]>([])
+  const [temporalBuckets, setTemporalBuckets] = useState<TemporalBucket[]>([])
 
   const setHmmStates = useStore((s) => s.setHmmStates)
   const setHmmTraining = useStore((s) => s.setHmmTraining)
   const setHmmProgress = useStore((s) => s.setHmmProgress)
   const setHmmError = useStore((s) => s.setHmmError)
   const setTacticAssignment = useStore((s) => s.setTacticAssignment)
-  const setExpandedState = useStore((s) => s.setExpandedState)
   const setHmmConverged = useStore((s) => s.setHmmConverged)
   const setHmmIterations = useStore((s) => s.setHmmIterations)
   const setHmmLogLikelihood = useStore((s) => s.setHmmLogLikelihood)
+
+  const grid = useStateGrid(hmmStates, tacticAssignments)
 
   const handleDiscover = useCallback(async (requestedStates: number) => {
     setHmmTraining(true)
@@ -42,78 +56,25 @@ export function StateExplorer() {
     setHmmLogLikelihood(null)
 
     try {
-      // Ensure HMM_STATE column exists
-      await ensureHmmStateColumn()
-
-      // Extract features from a random sample of flows
-      const featureRows = await extractFeatures(SAMPLE_SIZE)
-      if (featureRows.length < 10) {
-        throw new Error('Insufficient data for training (need at least 10 flows)')
-      }
-
-      setHmmProgress(10)
-
-      // Convert to feature matrix
-      const matrix = featureRows.map((row) => [
-        row.log1p_in_bytes, row.log1p_out_bytes, row.log1p_in_pkts, row.log1p_out_pkts,
-        row.log1p_duration_ms, row.log1p_iat_avg, row.bytes_ratio, row.pkts_per_second,
-        row.is_tcp, row.is_udp, row.is_icmp, row.port_category,
-      ])
-
-      // Run scaling + BIC + training + prediction in worker
-      const workerResult = await trainInWorker(matrix, requestedStates, (percent) => {
-        setHmmProgress(10 + Math.round(percent * 0.7))
+      const result = await discoverStates({
+        requestedStates,
+        sampleSize: SAMPLE_SIZE,
+        onProgress: setHmmProgress,
       })
 
-      setHmmConverged(workerResult.converged)
-      setHmmIterations(workerResult.iterations)
-      setHmmLogLikelihood(workerResult.logLikelihood)
-
-      setHmmProgress(80)
-
-      // Write state assignments back to DuckDB
-      const assignments = new Map<number, number>()
-      for (let i = 0; i < workerResult.states.length; i++) {
-        assignments.set(featureRows[i].rowid, workerResult.states[i])
-      }
-      await writeStateAssignments(assignments)
-
-      setHmmProgress(90)
-
-      // Get state signatures from DB
-      const signatures = await getStateSignatures()
-
-      // Build StateProfile objects with tactic suggestions
-      const profiles: StateProfile[] = signatures.map((sig) => {
-        const suggestion = suggestTactic({
-          stateId: sig.state_id,
-          flowCount: sig.flow_count,
-          avgInBytes: sig.avg_in_bytes,
-          avgOutBytes: sig.avg_out_bytes,
-          bytesRatio: sig.bytes_ratio,
-          avgDurationMs: sig.avg_duration_ms,
-          avgPktsPerSec: sig.avg_pkts_per_sec,
-          protocolDist: { tcp: sig.tcp_pct, udp: sig.udp_pct, icmp: sig.icmp_pct },
-          portCategoryDist: { wellKnown: sig.well_known_pct, registered: sig.registered_pct, ephemeral: sig.ephemeral_pct },
-        })
-
-        return {
-          stateId: sig.state_id,
-          flowCount: sig.flow_count,
-          avgInBytes: sig.avg_in_bytes,
-          avgOutBytes: sig.avg_out_bytes,
-          bytesRatio: sig.bytes_ratio,
-          avgDurationMs: sig.avg_duration_ms,
-          avgPktsPerSec: sig.avg_pkts_per_sec,
-          protocolDist: { tcp: sig.tcp_pct, udp: sig.udp_pct, icmp: sig.icmp_pct },
-          portCategoryDist: { wellKnown: sig.well_known_pct, registered: sig.registered_pct, ephemeral: sig.ephemeral_pct },
-          suggestedTactic: suggestion.tactic,
-          suggestedConfidence: suggestion.confidence,
-        }
-      })
-
-      setHmmStates(profiles)
+      setHmmConverged(result.converged)
+      setHmmIterations(result.iterations)
+      setHmmLogLikelihood(result.logLikelihood)
+      setHmmStates(result.profiles)
       setHmmProgress(100)
+
+      // Load analysis data in background
+      Promise.all([getStateTransitions(), getStateTemporalDist()])
+        .then(([trans, temporal]) => {
+          setTransitions(trans)
+          setTemporalBuckets(temporal)
+        })
+        .catch((err) => stateExplorerLogger.warn('Failed to load analysis data', { error: String(err) }))
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'HMM training failed'
       stateExplorerLogger.error('Discovery failed', { error: msg })
@@ -137,7 +98,71 @@ export function StateExplorer() {
     setExpandedState(expandedState === stateId ? null : stateId)
   }, [expandedState, setExpandedState])
 
+  const handleExportJson = useCallback(() => {
+    stateExplorerLogger.info('Exporting state profiles', { count: hmmStates.length })
+    const exported = hmmStates.map((state) => ({
+      stateId: state.stateId,
+      flowCount: state.flowCount,
+      avgInBytes: state.avgInBytes,
+      avgOutBytes: state.avgOutBytes,
+      bytesRatio: state.bytesRatio,
+      avgDurationMs: state.avgDurationMs,
+      avgPktsPerSec: state.avgPktsPerSec,
+      protocolDist: state.protocolDist,
+      portCategoryDist: state.portCategoryDist,
+      tactic: tacticAssignments[state.stateId] ?? state.suggestedTactic,
+      confidence: state.suggestedConfidence,
+    }))
+
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `state-profiles-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [hmmStates, tacticAssignments])
+
+  // Keep ref in sync for keyboard handler
+  useEffect(() => {
+    expandedStateRef.current = expandedState
+  }, [expandedState])
+
+  // Keyboard navigation for state cards
+  useEffect(() => {
+    if (hmmStates.length === 0) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const currentStates = useStore.getState().hmmStates
+      const currentExpanded = expandedStateRef.current
+
+      if (e.key === 'ArrowRight') {
+        if (currentExpanded === null) {
+          setExpandedState(currentStates[0].stateId)
+        } else {
+          const idx = currentStates.findIndex((s) => s.stateId === currentExpanded)
+          const nextIdx = (idx + 1) % currentStates.length
+          setExpandedState(currentStates[nextIdx].stateId)
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (currentExpanded === null) {
+          setExpandedState(currentStates[currentStates.length - 1].stateId)
+        } else {
+          const idx = currentStates.findIndex((s) => s.stateId === currentExpanded)
+          const prevIdx = (idx - 1 + currentStates.length) % currentStates.length
+          setExpandedState(currentStates[prevIdx].stateId)
+        }
+      } else if (e.key === 'Escape') {
+        setExpandedState(null)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [hmmStates.length])
+
   return (
+    <ErrorBoundary context="StateExplorer">
     <div className="flex flex-col h-full bg-background">
       <DiscoveryControls
         onDiscover={handleDiscover}
@@ -145,13 +170,60 @@ export function StateExplorer() {
         progress={hmmProgress}
         statesDiscovered={hmmStates.length}
         error={hmmError}
+        converged={hmmConverged}
+        iterations={hmmIterations}
       />
 
       {hmmStates.length > 0 ? (
         <>
+          <StateSummaryBar
+            states={hmmStates}
+            tacticAssignments={tacticAssignments}
+            onStateClick={(stateId) => {
+              useStore.getState().setSelectedHmmState(stateId)
+              useStore.getState().setActiveView('dashboard')
+            }}
+          />
+          <StateGridControls
+            sortBy={grid.sortBy}
+            sortDirection={grid.sortDirection}
+            minFlowCount={grid.minFlowCount}
+            tacticFilter={grid.tacticFilter}
+            onSortByChange={grid.setSortBy}
+            onSortDirectionToggle={grid.toggleSortDirection}
+            onMinFlowCountChange={grid.setMinFlowCount}
+            onTacticFilterChange={grid.setTacticFilter}
+          />
           <div className="flex-1 overflow-auto p-4">
+            {/* Comparison instruction */}
+            {grid.comparisonStates && grid.comparisonStates[1] === -1 && (
+              <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-sm text-blue-700 dark:text-blue-400">
+                Select another state to compare with State {grid.comparisonStates[0]}
+              </div>
+            )}
+
+            {/* Comparison view */}
+            {grid.comparisonStates && grid.comparisonStates[1] !== -1 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium">State Comparison</h3>
+                  <button
+                    onClick={grid.clearComparison}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Close ✕
+                  </button>
+                </div>
+                <StateComparison
+                  state1={hmmStates.find((s) => s.stateId === grid.comparisonStates![0])!}
+                  state2={hmmStates.find((s) => s.stateId === grid.comparisonStates![1])!}
+                />
+              </div>
+            )}
+
+            {/* State grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {hmmStates.map((state) => (
+              {grid.filteredAndSortedStates.map((state) => (
                 <StateCard
                   key={state.stateId}
                   state={state}
@@ -159,16 +231,40 @@ export function StateExplorer() {
                   onTacticAssign={handleTacticAssign}
                   expanded={expandedState === state.stateId}
                   onToggleExpand={() => handleToggleExpand(state.stateId)}
+                  selectedForComparison={
+                    grid.comparisonStates
+                      ? grid.comparisonStates[0] === state.stateId || grid.comparisonStates[1] === state.stateId
+                      : false
+                  }
+                  onToggleCompare={() => grid.toggleCompare(state.stateId)}
                 />
               ))}
             </div>
           </div>
-          <div className="px-4 py-3 border-t border-border">
+          {/* Analysis panels */}
+          {(transitions.length > 0 || temporalBuckets.length > 0) && (
+            <div className="px-4 pb-2 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {transitions.length > 0 && (
+                <StateTransitions transitions={transitions} nStates={hmmStates.length} />
+              )}
+              {temporalBuckets.length > 0 && (
+                <StateTemporal buckets={temporalBuckets} nStates={hmmStates.length} />
+              )}
+            </div>
+          )}
+
+          <div className="px-4 py-3 border-t border-border flex gap-2">
             <button
               onClick={handleSaveAll}
               className="px-4 py-2 text-sm font-medium rounded bg-primary text-primary-foreground hover:bg-primary/90"
             >
               Save All Labels
+            </button>
+            <button
+              onClick={handleExportJson}
+              className="px-4 py-2 text-sm font-medium rounded border border-border hover:bg-accent"
+            >
+              Export JSON
             </button>
           </div>
         </>
@@ -181,5 +277,6 @@ export function StateExplorer() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   )
 }
