@@ -17,9 +17,10 @@ interface GroupedBucket {
   total: number
 }
 
-function formatBucketLabel(bucket: string): string {
-  const match = bucket.match(/(\d{2}:\d{2})/)
-  return match ? match[1] : bucket
+function formatBucketLabel(bucket: string | unknown): string {
+  const s = String(bucket)
+  const match = s.match(/(\d{2}:\d{2})/)
+  return match ? match[1] : s
 }
 
 export const StateTemporal = memo(function StateTemporal({
@@ -29,10 +30,11 @@ export const StateTemporal = memo(function StateTemporal({
   const grouped = useMemo(() => {
     const map = new Map<string, GroupedBucket>()
     for (const b of buckets) {
-      let entry = map.get(b.bucket)
+      const key = String(b.bucket)
+      let entry = map.get(key)
       if (!entry) {
         entry = { label: formatBucketLabel(b.bucket), states: new Map(), total: 0 }
-        map.set(b.bucket, entry)
+        map.set(key, entry)
       }
       entry.states.set(b.stateId, b.count)
       entry.total += b.count
