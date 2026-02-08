@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from 'react'
 import { ATTACK_COLORS } from '@/lib/schema'
+import { useStore } from '@/lib/store'
 import { getSampleFlows, getStateTopHosts, getStateTimeline, getStateConnStates, getStatePortServices } from '@/lib/motherduck/queries'
 import { TacticSelector } from './TacticSelector'
 import { MiniTimeline } from './MiniTimeline'
@@ -110,11 +111,20 @@ export const StateCard = memo(function StateCard({
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div>
+        <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">State {state.stateId}</span>
-          <span className="text-xs text-muted-foreground ml-2">
+          <span className="text-xs text-muted-foreground">
             {state.flowCount.toLocaleString()} flows
           </span>
+          <button
+            className="text-xs text-primary hover:underline"
+            onClick={() => {
+              useStore.getState().setSelectedHmmState(state.stateId)
+              useStore.getState().setActiveView('dashboard')
+            }}
+          >
+            View Flows →
+          </button>
         </div>
         <TacticSelector
           stateId={state.stateId}
@@ -230,6 +240,7 @@ export const StateCard = memo(function StateCard({
       {/* Flow Preview */}
       <FlowPreview
         flows={sampleFlows}
+        totalFlowCount={state.flowCount}
         loading={flowsLoading}
         expanded={expanded}
         onExpand={onToggleExpand}

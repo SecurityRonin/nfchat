@@ -62,6 +62,8 @@ export interface FlowRecord {
   SERVICE?: string;
   HISTORY?: string;
   COMMUNITY_ID?: string;
+  // HMM state assignment
+  HMM_STATE?: number;
 }
 
 export const SCHEMA_DESCRIPTION = `

@@ -95,6 +95,8 @@ export function ForensicDashboard() {
   // View state
   const activeView = useStore((s) => s.activeView)
   const setActiveView = useStore((s) => s.setActiveView)
+  const selectedHmmState = useStore((s) => s.selectedHmmState)
+  const setSelectedHmmState = useStore((s) => s.setSelectedHmmState)
 
   // Store actions - individual selectors for stable references
   const addMessage = useStore((s) => s.addMessage)
@@ -131,6 +133,12 @@ export function ForensicDashboard() {
           builder.addCondition('IPV4_SRC_ADDR', '=', selectedSession.src_ip)
           builder.addCondition('FLOW_START_MILLISECONDS', '>=', selectedSession.start_time)
           builder.addCondition('FLOW_END_MILLISECONDS', '<=', selectedSession.end_time)
+          conditions.push(builder.build())
+        }
+        // Add HMM state filter if a state is selected from State Explorer
+        if (selectedHmmState !== null) {
+          const builder = new WhereClauseBuilder()
+          builder.addCondition('HMM_STATE', '=', selectedHmmState)
           conditions.push(builder.build())
         }
         const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1'
@@ -170,7 +178,7 @@ export function ForensicDashboard() {
     return () => {
       cancelled = true
     }
-  }, [hideBenign, columnFilters, selectedSession, currentPage, pageSize])
+  }, [hideBenign, columnFilters, selectedSession, selectedHmmState, currentPage, pageSize])
 
   // Track previous hideBenign to detect changes (not initial mount)
   const prevHideBenignRef = useRef(hideBenign)
@@ -275,6 +283,15 @@ export function ForensicDashboard() {
         </div>
         {activeView === 'dashboard' && (
           <div className="flex items-center gap-2">
+            {selectedHmmState !== null && (
+              <button
+                aria-label="Clear state filter"
+                onClick={() => setSelectedHmmState(null)}
+                className="px-2 py-1 text-xs rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors"
+              >
+                State {selectedHmmState} ✕
+              </button>
+            )}
             <button
               onClick={() => setShowKillChain(!showKillChain)}
               className={`px-3 py-1 text-sm rounded border transition-colors ${

@@ -10,6 +10,8 @@ describe('DiscoveryControls', () => {
     progress: 0,
     statesDiscovered: 0,
     error: null as string | null,
+    converged: null as boolean | null,
+    iterations: null as number | null,
   }
 
   it('renders Discover States button', () => {
@@ -55,5 +57,42 @@ describe('DiscoveryControls', () => {
   it('shows error message', () => {
     render(<DiscoveryControls {...defaultProps} error="Training failed" />)
     expect(screen.getByText(/training failed/i)).toBeInTheDocument()
+  })
+
+  it('shows convergence info when converged', () => {
+    render(
+      <DiscoveryControls
+        {...defaultProps}
+        statesDiscovered={8}
+        converged={true}
+        iterations={47}
+      />
+    )
+    expect(screen.getByText(/converged after 47 iterations/i)).toBeInTheDocument()
+  })
+
+  it('shows non-convergence info when not converged', () => {
+    render(
+      <DiscoveryControls
+        {...defaultProps}
+        statesDiscovered={8}
+        converged={false}
+        iterations={100}
+      />
+    )
+    expect(screen.getByText(/did not converge/i)).toBeInTheDocument()
+    expect(screen.getByText(/100 iterations/i)).toBeInTheDocument()
+  })
+
+  it('shows no convergence info when converged is null', () => {
+    render(
+      <DiscoveryControls
+        {...defaultProps}
+        statesDiscovered={8}
+        converged={null}
+        iterations={null}
+      />
+    )
+    expect(screen.queryByText(/converge/i)).not.toBeInTheDocument()
   })
 })

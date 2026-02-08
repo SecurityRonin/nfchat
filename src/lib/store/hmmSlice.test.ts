@@ -34,6 +34,18 @@ describe('hmmSlice', () => {
     it('expandedState defaults to null', () => {
       expect(store.getState().expandedState).toBeNull();
     });
+
+    it('hmmConverged defaults to null', () => {
+      expect(store.getState().hmmConverged).toBeNull();
+    });
+
+    it('hmmIterations defaults to null', () => {
+      expect(store.getState().hmmIterations).toBeNull();
+    });
+
+    it('hmmLogLikelihood defaults to null', () => {
+      expect(store.getState().hmmLogLikelihood).toBeNull();
+    });
   });
 
   describe('setHmmStates', () => {
@@ -169,6 +181,50 @@ describe('hmmSlice', () => {
     });
   });
 
+  describe('setHmmConverged', () => {
+    it('sets converged to true', () => {
+      store.getState().setHmmConverged(true);
+      expect(store.getState().hmmConverged).toBe(true);
+    });
+
+    it('sets converged to false', () => {
+      store.getState().setHmmConverged(false);
+      expect(store.getState().hmmConverged).toBe(false);
+    });
+
+    it('resets converged to null', () => {
+      store.getState().setHmmConverged(true);
+      store.getState().setHmmConverged(null);
+      expect(store.getState().hmmConverged).toBeNull();
+    });
+  });
+
+  describe('setHmmIterations', () => {
+    it('sets iterations count', () => {
+      store.getState().setHmmIterations(42);
+      expect(store.getState().hmmIterations).toBe(42);
+    });
+
+    it('resets iterations to null', () => {
+      store.getState().setHmmIterations(42);
+      store.getState().setHmmIterations(null);
+      expect(store.getState().hmmIterations).toBeNull();
+    });
+  });
+
+  describe('setHmmLogLikelihood', () => {
+    it('sets log likelihood value', () => {
+      store.getState().setHmmLogLikelihood(-1234.56);
+      expect(store.getState().hmmLogLikelihood).toBe(-1234.56);
+    });
+
+    it('resets log likelihood to null', () => {
+      store.getState().setHmmLogLikelihood(-100);
+      store.getState().setHmmLogLikelihood(null);
+      expect(store.getState().hmmLogLikelihood).toBeNull();
+    });
+  });
+
   describe('resetHmm', () => {
     it('resets all HMM state to initial values', () => {
       // Set various state
@@ -192,6 +248,9 @@ describe('hmmSlice', () => {
       store.getState().setHmmError('Some error');
       store.getState().setTacticAssignment(0, 'Reconnaissance');
       store.getState().setExpandedState(0);
+      store.getState().setHmmConverged(true);
+      store.getState().setHmmIterations(50);
+      store.getState().setHmmLogLikelihood(-1000);
 
       // Reset
       store.getState().resetHmm();
@@ -203,6 +262,9 @@ describe('hmmSlice', () => {
       expect(store.getState().hmmError).toBeNull();
       expect(store.getState().tacticAssignments).toEqual({});
       expect(store.getState().expandedState).toBeNull();
+      expect(store.getState().hmmConverged).toBeNull();
+      expect(store.getState().hmmIterations).toBeNull();
+      expect(store.getState().hmmLogLikelihood).toBeNull();
     });
   });
 });

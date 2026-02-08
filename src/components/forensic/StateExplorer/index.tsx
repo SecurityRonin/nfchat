@@ -3,15 +3,14 @@ import { useStore } from '@/lib/store'
 import { DiscoveryControls } from './DiscoveryControls'
 import { StateCard } from './StateCard'
 import { extractFeatures, ensureHmmStateColumn, writeStateAssignments, getStateSignatures, updateStateTactic } from '@/lib/motherduck/queries'
-import { GaussianHMM, StandardScaler, suggestTactic } from '@/lib/hmm'
+import { suggestTactic } from '@/lib/hmm'
+import { trainInWorker } from '@/lib/hmm/worker-bridge'
 import { logger } from '@/lib/logger'
 import type { StateProfile } from '@/lib/store/types'
 
 const stateExplorerLogger = logger.child('StateExplorer')
 
 const SAMPLE_SIZE = 50_000
-
-const yieldToMain = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 /**
  * State Explorer - discover behavioral states via HMM and assign ATT&CK tactics.
@@ -30,11 +29,17 @@ export function StateExplorer() {
   const setHmmError = useStore((s) => s.setHmmError)
   const setTacticAssignment = useStore((s) => s.setTacticAssignment)
   const setExpandedState = useStore((s) => s.setExpandedState)
+  const setHmmConverged = useStore((s) => s.setHmmConverged)
+  const setHmmIterations = useStore((s) => s.setHmmIterations)
+  const setHmmLogLikelihood = useStore((s) => s.setHmmLogLikelihood)
 
   const handleDiscover = useCallback(async (requestedStates: number) => {
     setHmmTraining(true)
     setHmmProgress(0)
     setHmmError(null)
+    setHmmConverged(null)
+    setHmmIterations(null)
+    setHmmLogLikelihood(null)
 
     try {
       // Ensure HMM_STATE column exists
@@ -47,7 +52,6 @@ export function StateExplorer() {
       }
 
       setHmmProgress(10)
-      await yieldToMain()
 
       // Convert to feature matrix
       const matrix = featureRows.map((row) => [
@@ -56,54 +60,21 @@ export function StateExplorer() {
         row.is_tcp, row.is_udp, row.is_icmp, row.port_category,
       ])
 
-      // Scale features
-      const scaler = new StandardScaler()
-      const scaled = scaler.fitTransform(matrix)
-
-      setHmmProgress(20)
-      await yieldToMain()
-
-      // Determine state count
-      let nStates: number
-      if (requestedStates > 0) {
-        nStates = requestedStates
-      } else {
-        // Auto-select via BIC over range 4-10
-        let bestBic = Infinity
-        nStates = 4
-        for (let k = 4; k <= 10; k++) {
-          const candidate = new GaussianHMM(k, 12, { maxIter: 20, seed: 42 })
-          candidate.fit([scaled])
-          const bic = candidate.bic([scaled])
-          if (bic < bestBic) {
-            bestBic = bic
-            nStates = k
-          }
-          await yieldToMain()
-        }
-      }
-
-      setHmmProgress(40)
-      await yieldToMain()
-
-      // Train final model
-      const hmm = new GaussianHMM(nStates, 12, { maxIter: 100, seed: 42 })
-      hmm.fit([scaled], {
-        onProgress: (iter, maxIter) => {
-          setHmmProgress(40 + Math.round((iter / maxIter) * 40))
-        },
+      // Run scaling + BIC + training + prediction in worker
+      const workerResult = await trainInWorker(matrix, requestedStates, (percent) => {
+        setHmmProgress(10 + Math.round(percent * 0.7))
       })
 
-      setHmmProgress(80)
-      await yieldToMain()
+      setHmmConverged(workerResult.converged)
+      setHmmIterations(workerResult.iterations)
+      setHmmLogLikelihood(workerResult.logLikelihood)
 
-      // Predict states
-      const states = hmm.predict(scaled)
+      setHmmProgress(80)
 
       // Write state assignments back to DuckDB
       const assignments = new Map<number, number>()
-      for (let i = 0; i < states.length; i++) {
-        assignments.set(featureRows[i].rowid, states[i])
+      for (let i = 0; i < workerResult.states.length; i++) {
+        assignments.set(featureRows[i].rowid, workerResult.states[i])
       }
       await writeStateAssignments(assignments)
 
@@ -150,7 +121,7 @@ export function StateExplorer() {
     } finally {
       setHmmTraining(false)
     }
-  }, [setHmmStates, setHmmTraining, setHmmProgress, setHmmError])
+  }, [setHmmStates, setHmmTraining, setHmmProgress, setHmmError, setHmmConverged, setHmmIterations, setHmmLogLikelihood])
 
   const handleTacticAssign = useCallback((stateId: number, tactic: string) => {
     setTacticAssignment(stateId, tactic)

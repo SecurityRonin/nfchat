@@ -3,6 +3,7 @@ import type { FlowRecord } from '@/lib/schema'
 
 interface FlowPreviewProps {
   flows: Partial<FlowRecord>[]
+  totalFlowCount: number
   loading: boolean
   expanded: boolean
   onExpand: () => void
@@ -20,17 +21,19 @@ const COLUMNS = [
 
 export const FlowPreview = memo(function FlowPreview({
   flows,
+  totalFlowCount,
   loading,
   expanded,
   onExpand,
 }: FlowPreviewProps) {
+  const displayCount = expanded ? flows.length : totalFlowCount
   return (
     <div className="border-t border-border mt-2 pt-2">
       <button
         onClick={onExpand}
         className="text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        {expanded ? '▾ Sample Flows' : '▸ Sample Flows'} ({flows.length})
+        {expanded ? '▾ Sample Flows' : '▸ Sample Flows'} ({displayCount.toLocaleString()})
       </button>
 
       {expanded && (

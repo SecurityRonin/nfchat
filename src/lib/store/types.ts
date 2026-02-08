@@ -145,6 +145,9 @@ export interface HmmState {
   hmmError: string | null
   tacticAssignments: Record<number, string>
   expandedState: number | null
+  hmmConverged: boolean | null
+  hmmIterations: number | null
+  hmmLogLikelihood: number | null
 }
 
 export interface HmmActions {
@@ -154,6 +157,9 @@ export interface HmmActions {
   setHmmError: (error: string | null) => void
   setTacticAssignment: (stateId: number, tactic: string) => void
   setExpandedState: (stateId: number | null) => void
+  setHmmConverged: (converged: boolean | null) => void
+  setHmmIterations: (iterations: number | null) => void
+  setHmmLogLikelihood: (logLikelihood: number | null) => void
   resetHmm: () => void
 }
 
@@ -162,10 +168,12 @@ export type HmmSlice = HmmState & HmmActions;
 // View slice
 export interface ViewState {
   activeView: 'dashboard' | 'stateExplorer'
+  selectedHmmState: number | null
 }
 
 export interface ViewActions {
   setActiveView: (view: 'dashboard' | 'stateExplorer') => void
+  setSelectedHmmState: (stateId: number | null) => void
 }
 
 export type ViewSlice = ViewState & ViewActions;

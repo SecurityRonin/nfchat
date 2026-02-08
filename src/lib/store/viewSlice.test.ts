@@ -28,4 +28,27 @@ describe('viewSlice', () => {
       expect(store.getState().activeView).toBe('dashboard');
     });
   });
+
+  describe('selectedHmmState', () => {
+    it('defaults to null', () => {
+      expect(store.getState().selectedHmmState).toBeNull();
+    });
+
+    it('sets a state ID', () => {
+      store.getState().setSelectedHmmState(3);
+      expect(store.getState().selectedHmmState).toBe(3);
+    });
+
+    it('clears back to null', () => {
+      store.getState().setSelectedHmmState(3);
+      store.getState().setSelectedHmmState(null);
+      expect(store.getState().selectedHmmState).toBeNull();
+    });
+
+    it('updates to a different state ID', () => {
+      store.getState().setSelectedHmmState(1);
+      store.getState().setSelectedHmmState(5);
+      expect(store.getState().selectedHmmState).toBe(5);
+    });
+  });
 });

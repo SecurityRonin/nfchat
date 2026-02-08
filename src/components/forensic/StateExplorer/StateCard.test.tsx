@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StateCard } from './StateCard'
+import { useStore } from '@/lib/store'
 import type { StateProfile } from '@/lib/store/types'
 
 // Mock query functions
@@ -162,5 +163,27 @@ describe('StateCard', () => {
 
     await user.click(screen.getByRole('button', { name: /sample flows/i }))
     expect(onToggle).toHaveBeenCalled()
+  })
+
+  it('renders View Flows button that navigates to dashboard with state filter', async () => {
+    const user = userEvent.setup()
+    useStore.setState({ activeView: 'stateExplorer', selectedHmmState: null })
+
+    render(
+      <StateCard
+        state={mockState}
+        onTacticAssign={vi.fn()}
+        expanded={false}
+        onToggleExpand={vi.fn()}
+      />
+    )
+
+    const viewFlowsBtn = screen.getByRole('button', { name: /view flows/i })
+    expect(viewFlowsBtn).toBeInTheDocument()
+
+    await user.click(viewFlowsBtn)
+
+    expect(useStore.getState().selectedHmmState).toBe(0)
+    expect(useStore.getState().activeView).toBe('dashboard')
   })
 })

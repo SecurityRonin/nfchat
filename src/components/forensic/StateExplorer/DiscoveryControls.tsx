@@ -7,6 +7,8 @@ interface DiscoveryControlsProps {
   progress: number
   statesDiscovered: number
   error: string | null
+  converged?: boolean | null
+  iterations?: number | null
 }
 
 const STATE_OPTIONS = [
@@ -25,6 +27,8 @@ export function DiscoveryControls({
   progress,
   statesDiscovered,
   error,
+  converged = null,
+  iterations = null,
 }: DiscoveryControlsProps) {
   const [stateCount, setStateCount] = useState(0)
 
@@ -66,6 +70,12 @@ export function DiscoveryControls({
       {!training && statesDiscovered > 0 && (
         <span className="text-sm text-muted-foreground">
           {statesDiscovered} states discovered
+          {converged === true && iterations != null && (
+            <> &middot; Converged after {iterations} iterations</>
+          )}
+          {converged === false && iterations != null && (
+            <> &middot; Did not converge ({iterations} iterations)</>
+          )}
         </span>
       )}
 

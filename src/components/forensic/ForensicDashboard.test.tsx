@@ -263,6 +263,61 @@ describe('ForensicDashboard', () => {
     })
   })
 
+  describe('HMM state filter', () => {
+    it('adds HMM_STATE condition to whereClause when selectedHmmState is set', async () => {
+      useStore.setState({ selectedHmmState: 3, activeView: 'dashboard' })
+
+      render(<ForensicDashboard />)
+
+      await waitFor(() => {
+        const calls = mockGetFlows.mock.calls
+        expect(calls.length).toBeGreaterThan(0)
+        const lastCall = calls[calls.length - 1]
+        const whereClause = lastCall[0]?.whereClause as string
+        expect(whereClause).toContain('HMM_STATE = 3')
+      })
+    })
+
+    it('does not add HMM_STATE condition when selectedHmmState is null', async () => {
+      useStore.setState({ selectedHmmState: null, activeView: 'dashboard' })
+
+      render(<ForensicDashboard />)
+
+      await waitFor(() => {
+        const calls = mockGetFlows.mock.calls
+        expect(calls.length).toBeGreaterThan(0)
+        const lastCall = calls[calls.length - 1]
+        const whereClause = lastCall[0]?.whereClause as string
+        expect(whereClause).not.toContain('HMM_STATE')
+      })
+    })
+
+    it('shows clear chip when selectedHmmState is set', async () => {
+      useStore.setState({ selectedHmmState: 2, activeView: 'dashboard' })
+
+      render(<ForensicDashboard />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/State 2/)).toBeInTheDocument()
+      })
+    })
+
+    it('clears selectedHmmState when clear chip is clicked', async () => {
+      useStore.setState({ selectedHmmState: 2, activeView: 'dashboard' })
+
+      render(<ForensicDashboard />)
+
+      await waitFor(() => {
+        expect(screen.getByText(/State 2/)).toBeInTheDocument()
+      })
+
+      const clearButton = screen.getByRole('button', { name: /clear state filter/i })
+      clearButton.click()
+
+      expect(useStore.getState().selectedHmmState).toBeNull()
+    })
+  })
+
   describe('kill chain session selection', () => {
     it('filters flows immediately when a session is selected', async () => {
       render(<ForensicDashboard />)

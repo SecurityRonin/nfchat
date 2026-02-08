@@ -6,7 +6,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import type { FlowRecord } from '@/lib/schema';
-import { MonoCell, NumericCell, ProtocolCell, AttackBadge } from './cells';
+import { MonoCell, NumericCell, ProtocolCell, AttackBadge, StateBadge } from './cells';
 
 export function createFlowColumns(): ColumnDef<Partial<FlowRecord>>[] {
   return [
@@ -54,6 +54,11 @@ export function createFlowColumns(): ColumnDef<Partial<FlowRecord>>[] {
         const cellValue = row.getValue(columnId) as string;
         return filterValue.includes(cellValue);
       },
+    },
+    {
+      accessorKey: 'HMM_STATE',
+      header: 'State',
+      cell: ({ getValue }) => <StateBadge value={getValue<number>()} />,
     },
   ];
 }

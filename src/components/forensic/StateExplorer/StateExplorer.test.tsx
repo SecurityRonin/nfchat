@@ -21,15 +21,18 @@ vi.mock('@/lib/motherduck/queries', () => ({
 
 // Mock HMM engine
 vi.mock('@/lib/hmm', () => ({
-  GaussianHMM: vi.fn().mockImplementation(() => ({
-    fit: vi.fn().mockReturnValue({ logLikelihood: -100, iterations: 10, converged: true }),
-    predict: vi.fn().mockReturnValue([0, 1, 0, 1]),
-    bic: vi.fn().mockReturnValue(200),
-  })),
-  StandardScaler: vi.fn().mockImplementation(() => ({
-    fitTransform: vi.fn().mockReturnValue([[0, 0], [1, 1]]),
-  })),
   suggestTactic: vi.fn().mockReturnValue({ tactic: 'Benign', confidence: 0.8 }),
+}))
+
+// Mock worker bridge
+vi.mock('@/lib/hmm/worker-bridge', () => ({
+  trainInWorker: vi.fn().mockResolvedValue({
+    states: [0, 1, 0, 1],
+    nStates: 2,
+    converged: true,
+    iterations: 10,
+    logLikelihood: -100,
+  }),
 }))
 
 const mockStates: StateProfile[] = [
@@ -70,6 +73,9 @@ describe('StateExplorer', () => {
       hmmError: null,
       tacticAssignments: {},
       expandedState: null,
+      hmmConverged: null,
+      hmmIterations: null,
+      hmmLogLikelihood: null,
     })
   })
 

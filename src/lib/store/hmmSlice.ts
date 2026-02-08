@@ -8,6 +8,9 @@ export const createHmmSlice: StateCreator<HmmSlice> = (set) => ({
   hmmError: null,
   tacticAssignments: {},
   expandedState: null,
+  hmmConverged: null,
+  hmmIterations: null,
+  hmmLogLikelihood: null,
 
   setHmmStates: (states) => set({ hmmStates: states }),
   setHmmTraining: (training) => set({ hmmTraining: training }),
@@ -18,6 +21,9 @@ export const createHmmSlice: StateCreator<HmmSlice> = (set) => ({
       tacticAssignments: { ...state.tacticAssignments, [stateId]: tactic },
     })),
   setExpandedState: (stateId) => set({ expandedState: stateId }),
+  setHmmConverged: (converged) => set({ hmmConverged: converged }),
+  setHmmIterations: (iterations) => set({ hmmIterations: iterations }),
+  setHmmLogLikelihood: (logLikelihood) => set({ hmmLogLikelihood: logLikelihood }),
   resetHmm: () =>
     set({
       hmmStates: [],
@@ -26,5 +32,8 @@ export const createHmmSlice: StateCreator<HmmSlice> = (set) => ({
       hmmError: null,
       tacticAssignments: {},
       expandedState: null,
+      hmmConverged: null,
+      hmmIterations: null,
+      hmmLogLikelihood: null,
     }),
 })
