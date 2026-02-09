@@ -7,16 +7,29 @@
 import { MDConnection } from '@motherduck/wasm-client';
 import { getMotherDuckToken } from '../motherduck-auth';
 
-// Singleton connection
-let connection: MDConnection | null = null;
+// Singleton connection promise — ensures concurrent callers all wait for
+// full initialization (including USE my_db) before using the connection.
+let connectionPromise: Promise<MDConnection> | null = null;
 
 /**
  * Initialize MotherDuck connection.
  * Requires a valid MotherDuck token configured via Settings or environment.
+ *
+ * Concurrent callers share the same initialization promise so that
+ * `USE my_db` completes before any query executes.
  */
 export async function initMotherDuck(): Promise<MDConnection> {
-  if (connection) return connection;
+  if (!connectionPromise) {
+    connectionPromise = createConnection().catch((err) => {
+      // Clear on failure so next call retries
+      connectionPromise = null;
+      throw err;
+    });
+  }
+  return connectionPromise;
+}
 
+async function createConnection(): Promise<MDConnection> {
   const token = getMotherDuckToken();
   if (!token) {
     throw new Error(
@@ -25,29 +38,23 @@ export async function initMotherDuck(): Promise<MDConnection> {
   }
 
   console.log('[MotherDuck] Creating connection...');
-  connection = MDConnection.create({ mdToken: token });
+  const conn = MDConnection.create({ mdToken: token });
 
-  // Add timeout for initialization
   const timeoutMs = 30000;
-  const initPromise = connection.isInitialized();
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(
-      () => reject(new Error(`MotherDuck connection timeout after ${timeoutMs}ms`)),
-      timeoutMs
-    );
-  });
+  await Promise.race([
+    conn.isInitialized(),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`MotherDuck connection timeout after ${timeoutMs}ms`)),
+        timeoutMs
+      )
+    ),
+  ]);
 
-  try {
-    await Promise.race([initPromise, timeoutPromise]);
-    // Set default database to my_db where flows table lives
-    await connection.evaluateQuery('USE my_db');
-    console.log('[MotherDuck] Connection initialized successfully');
-  } catch (err) {
-    connection = null;
-    throw err;
-  }
-
-  return connection;
+  // Set default database to my_db where flows table lives
+  await conn.evaluateQuery('USE my_db');
+  console.log('[MotherDuck] Connection initialized successfully');
+  return conn;
 }
 
 /**
@@ -61,5 +68,5 @@ export async function getConnection(): Promise<MDConnection> {
  * Reset the connection (useful for token changes).
  */
 export function resetConnection(): void {
-  connection = null;
+  connectionPromise = null;
 }

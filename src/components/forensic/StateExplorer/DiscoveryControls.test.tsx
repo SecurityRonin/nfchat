@@ -19,18 +19,18 @@ describe('DiscoveryControls', () => {
     expect(screen.getByRole('button', { name: /discover states/i })).toBeInTheDocument()
   })
 
-  it('renders state count selector', () => {
+  it('does not render a state count selector', () => {
     render(<DiscoveryControls {...defaultProps} />)
-    expect(screen.getByLabelText(/states/i)).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   })
 
-  it('calls onDiscover with selected state count when clicked', async () => {
+  it('calls onDiscover with no arguments when clicked', async () => {
     const user = userEvent.setup()
     const onDiscover = vi.fn()
     render(<DiscoveryControls {...defaultProps} onDiscover={onDiscover} />)
 
     await user.click(screen.getByRole('button', { name: /discover states/i }))
-    expect(onDiscover).toHaveBeenCalledWith(0) // 0 = auto
+    expect(onDiscover).toHaveBeenCalledWith()
   })
 
   it('disables button during training', () => {

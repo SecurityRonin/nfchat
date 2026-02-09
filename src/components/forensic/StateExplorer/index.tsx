@@ -47,7 +47,7 @@ export function StateExplorer() {
 
   const grid = useStateGrid(hmmStates, tacticAssignments)
 
-  const handleDiscover = useCallback(async (requestedStates: number) => {
+  const handleDiscover = useCallback(async () => {
     setHmmTraining(true)
     setHmmProgress(0)
     setHmmError(null)
@@ -57,7 +57,7 @@ export function StateExplorer() {
 
     try {
       const result = await discoverStates({
-        requestedStates,
+        requestedStates: 0,
         sampleSize: SAMPLE_SIZE,
         onProgress: setHmmProgress,
       })
