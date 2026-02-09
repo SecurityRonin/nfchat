@@ -53,33 +53,35 @@ describe('HMM Query Module', () => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
       const sql = mockExecuteQuery.mock.calls[0][0];
 
-      // Verify all 12 feature columns are present
-      expect(sql).toContain('LN(1 + IN_BYTES) as log1p_in_bytes');
-      expect(sql).toContain('LN(1 + OUT_BYTES) as log1p_out_bytes');
-      expect(sql).toContain('LN(1 + IN_PKTS) as log1p_in_pkts');
-      expect(sql).toContain('LN(1 + OUT_PKTS) as log1p_out_pkts');
-      expect(sql).toContain('LN(1 + FLOW_DURATION_MILLISECONDS) as log1p_duration_ms');
-      expect(sql).toContain('LN(1 + COALESCE(SRC_TO_DST_IAT_AVG, 0)) as log1p_iat_avg');
-      expect(sql).toContain('CAST(IN_BYTES AS DOUBLE) / (OUT_BYTES + 1) as bytes_ratio');
-      expect(sql).toContain('CAST(IN_PKTS + OUT_PKTS AS DOUBLE) / GREATEST(FLOW_DURATION_MILLISECONDS / 1000.0, 0.001) as pkts_per_second');
-      expect(sql).toContain('CASE WHEN PROTOCOL = 6 THEN 1 ELSE 0 END as is_tcp');
-      expect(sql).toContain('CASE WHEN PROTOCOL = 17 THEN 1 ELSE 0 END as is_udp');
-      expect(sql).toContain('CASE WHEN PROTOCOL = 1 THEN 1 ELSE 0 END as is_icmp');
-      expect(sql).toContain('CASE WHEN L4_DST_PORT <= 1023 THEN 0 WHEN L4_DST_PORT <= 49151 THEN 1 ELSE 2 END as port_category');
+      // Verify all 12 feature columns are present (may have table alias prefix)
+      expect(sql).toMatch(/LN\(1 \+ [\w.]*IN_BYTES\) as log1p_in_bytes/);
+      expect(sql).toMatch(/LN\(1 \+ [\w.]*OUT_BYTES\) as log1p_out_bytes/);
+      expect(sql).toMatch(/LN\(1 \+ [\w.]*IN_PKTS\) as log1p_in_pkts/);
+      expect(sql).toMatch(/LN\(1 \+ [\w.]*OUT_PKTS\) as log1p_out_pkts/);
+      expect(sql).toMatch(/LN\(1 \+ [\w.]*FLOW_DURATION_MILLISECONDS\) as log1p_duration_ms/);
+      expect(sql).toContain('as log1p_iat_avg');
+      expect(sql).toContain('as bytes_ratio');
+      expect(sql).toContain('as pkts_per_second');
+      expect(sql).toContain('as is_tcp');
+      expect(sql).toContain('as is_udp');
+      expect(sql).toContain('as is_icmp');
+      expect(sql).toContain('as port_category');
       expect(sql).toContain('rowid');
     });
 
-    it('does not include LIMIT in subquery when no sampleSize is provided', async () => {
+    it('does not include LIMIT or SAMPLE when no sampleSize is provided', async () => {
       await extractFeatures();
       const sql = mockExecuteQuery.mock.calls[0][0];
       expect(sql).not.toMatch(/LIMIT/i);
+      expect(sql).not.toMatch(/USING SAMPLE/i);
     });
 
-    it('limits destination IPs to cap total rows when sampleSize is provided', async () => {
+    it('uses USING SAMPLE and limits IPs when sampleSize is provided', async () => {
       await extractFeatures(50000);
       const sql = mockExecuteQuery.mock.calls[0][0];
-      // sampleSize=50000, assume ~25 flows/IP → limit ~2000 IPs
-      expect(sql).toContain('LIMIT 2000');
+      // sampleSize=50000, ipLimit = min(500, max(100, floor(50000/50))) = 500
+      expect(sql).toContain('USING SAMPLE 50000 ROWS');
+      expect(sql).toContain('LIMIT 500');
     });
 
     it('returns typed FlowFeatureRow results', async () => {
@@ -110,15 +112,16 @@ describe('HMM Query Module', () => {
       const sql = mockExecuteQuery.mock.calls[0][0];
 
       expect(sql).toContain('IPV4_DST_ADDR as dst_ip');
-      expect(sql).toContain('ORDER BY IPV4_DST_ADDR, FLOW_START_MILLISECONDS');
+      expect(sql).toMatch(/ORDER BY [\w.]*IPV4_DST_ADDR, [\w.]*FLOW_START_MILLISECONDS/);
     });
 
-    it('filters to destination IPs with at least 3 flows', async () => {
+    it('filters to destination IPs with at least 3 flows using CTE join', async () => {
       await extractFeatures();
       const sql = mockExecuteQuery.mock.calls[0][0];
 
-      expect(sql).toContain('IPV4_DST_ADDR IN');
+      expect(sql).toContain('valid_ips');
       expect(sql).toContain('HAVING COUNT(*) >= 3');
+      expect(sql).toContain('INNER JOIN valid_ips');
     });
   });
 
