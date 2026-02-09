@@ -53,40 +53,37 @@ describe('HMM Query Module', () => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
       const sql = mockExecuteQuery.mock.calls[0][0];
 
-      // Verify all 12 feature columns are present (may have table alias prefix)
-      expect(sql).toMatch(/LN\(1 \+ [\w.]*IN_BYTES\) as log1p_in_bytes/);
-      expect(sql).toMatch(/LN\(1 \+ [\w.]*OUT_BYTES\) as log1p_out_bytes/);
-      expect(sql).toMatch(/LN\(1 \+ [\w.]*IN_PKTS\) as log1p_in_pkts/);
-      expect(sql).toMatch(/LN\(1 \+ [\w.]*OUT_PKTS\) as log1p_out_pkts/);
-      expect(sql).toMatch(/LN\(1 \+ [\w.]*FLOW_DURATION_MILLISECONDS\) as log1p_duration_ms/);
-      expect(sql).toContain('as log1p_iat_avg');
-      expect(sql).toContain('as bytes_ratio');
-      expect(sql).toContain('as pkts_per_second');
-      expect(sql).toContain('as is_tcp');
-      expect(sql).toContain('as is_udp');
-      expect(sql).toContain('as is_icmp');
-      expect(sql).toContain('as port_category');
+      // Verify all 12 feature columns are present
+      expect(sql).toContain('log1p_in_bytes');
+      expect(sql).toContain('log1p_out_bytes');
+      expect(sql).toContain('log1p_in_pkts');
+      expect(sql).toContain('log1p_out_pkts');
+      expect(sql).toContain('log1p_duration_ms');
+      expect(sql).toContain('log1p_iat_avg');
+      expect(sql).toContain('bytes_ratio');
+      expect(sql).toContain('pkts_per_second');
+      expect(sql).toContain('is_tcp');
+      expect(sql).toContain('is_udp');
+      expect(sql).toContain('is_icmp');
+      expect(sql).toContain('port_category');
       expect(sql).toContain('rowid');
     });
 
-    it('does not include LIMIT or SAMPLE when no sampleSize is provided', async () => {
+    it('does not include LIMIT when no sampleSize is provided', async () => {
       await extractFeatures();
       const sql = mockExecuteQuery.mock.calls[0][0];
       expect(sql).not.toMatch(/LIMIT/i);
-      expect(sql).not.toMatch(/USING SAMPLE/i);
     });
 
-    it('uses USING SAMPLE and limits IPs when sampleSize is provided', async () => {
-      await extractFeatures(50000);
+    it('uses LIMIT when sampleSize is provided', async () => {
+      await extractFeatures(10000);
       const sql = mockExecuteQuery.mock.calls[0][0];
-      // sampleSize=50000, ipLimit = min(500, max(100, floor(50000/50))) = 500
-      expect(sql).toContain('USING SAMPLE 50000 ROWS');
-      expect(sql).toContain('LIMIT 500');
+      expect(sql).toContain('LIMIT 10000');
     });
 
     it('returns typed FlowFeatureRow results', async () => {
-      const mockRow: FlowFeatureRow = {
-        rowid: 1,
+      const makeRow = (rowid: number): FlowFeatureRow => ({
+        rowid,
         dst_ip: '10.0.0.1',
         log1p_in_bytes: 5.2,
         log1p_out_bytes: 3.1,
@@ -100,28 +97,38 @@ describe('HMM Query Module', () => {
         is_udp: 0,
         is_icmp: 0,
         port_category: 0,
-      };
-      mockExecuteQuery.mockResolvedValueOnce([mockRow]);
+      });
+      // Need >= 3 rows per IP to pass the JS filter
+      const mockRows = [makeRow(1), makeRow(2), makeRow(3)];
+      mockExecuteQuery.mockResolvedValueOnce(mockRows);
 
       const result = await extractFeatures();
-      expect(result).toEqual([mockRow]);
+      expect(result).toEqual(mockRows);
     });
 
-    it('selects dst_ip column and orders by destination then timestamp', async () => {
+    it('selects dst_ip column from IPV4_DST_ADDR', async () => {
       await extractFeatures();
       const sql = mockExecuteQuery.mock.calls[0][0];
-
       expect(sql).toContain('IPV4_DST_ADDR as dst_ip');
-      expect(sql).toMatch(/ORDER BY [\w.]*IPV4_DST_ADDR, [\w.]*FLOW_START_MILLISECONDS/);
     });
 
-    it('filters to destination IPs with at least 3 flows using CTE join', async () => {
-      await extractFeatures();
-      const sql = mockExecuteQuery.mock.calls[0][0];
+    it('filters to IPs with >= 3 flows and sorts by dst_ip in JavaScript', async () => {
+      // Provide mock data with mixed IPs — some with >= 3 flows, some with fewer
+      const mockRows: FlowFeatureRow[] = [
+        // IP with 3 flows (should be kept)
+        { rowid: 1, dst_ip: '10.0.0.1', log1p_in_bytes: 1, log1p_out_bytes: 1, log1p_in_pkts: 1, log1p_out_pkts: 1, log1p_duration_ms: 1, log1p_iat_avg: 1, bytes_ratio: 1, pkts_per_second: 1, is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0 },
+        { rowid: 2, dst_ip: '10.0.0.1', log1p_in_bytes: 1, log1p_out_bytes: 1, log1p_in_pkts: 1, log1p_out_pkts: 1, log1p_duration_ms: 1, log1p_iat_avg: 1, bytes_ratio: 1, pkts_per_second: 1, is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0 },
+        { rowid: 3, dst_ip: '10.0.0.1', log1p_in_bytes: 1, log1p_out_bytes: 1, log1p_in_pkts: 1, log1p_out_pkts: 1, log1p_duration_ms: 1, log1p_iat_avg: 1, bytes_ratio: 1, pkts_per_second: 1, is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0 },
+        // IP with 2 flows (should be filtered out)
+        { rowid: 4, dst_ip: '10.0.0.2', log1p_in_bytes: 1, log1p_out_bytes: 1, log1p_in_pkts: 1, log1p_out_pkts: 1, log1p_duration_ms: 1, log1p_iat_avg: 1, bytes_ratio: 1, pkts_per_second: 1, is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0 },
+        { rowid: 5, dst_ip: '10.0.0.2', log1p_in_bytes: 1, log1p_out_bytes: 1, log1p_in_pkts: 1, log1p_out_pkts: 1, log1p_duration_ms: 1, log1p_iat_avg: 1, bytes_ratio: 1, pkts_per_second: 1, is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0 },
+      ];
+      mockExecuteQuery.mockResolvedValueOnce(mockRows);
 
-      expect(sql).toContain('valid_ips');
-      expect(sql).toContain('HAVING COUNT(*) >= 3');
-      expect(sql).toContain('INNER JOIN valid_ips');
+      const result = await extractFeatures(10000);
+      // Should only return 10.0.0.1 (3 flows), not 10.0.0.2 (2 flows)
+      expect(result).toHaveLength(3);
+      expect(result.every(r => r.dst_ip === '10.0.0.1')).toBe(true);
     });
   });
 

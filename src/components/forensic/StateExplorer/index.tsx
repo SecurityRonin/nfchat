@@ -16,7 +16,7 @@ import { logger } from '@/lib/logger'
 
 const stateExplorerLogger = logger.child('StateExplorer')
 
-const SAMPLE_SIZE = 50_000
+const SAMPLE_SIZE = 10_000
 
 /**
  * State Explorer - discover behavioral states via HMM and assign ATT&CK tactics.

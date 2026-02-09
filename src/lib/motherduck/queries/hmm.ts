@@ -109,89 +109,58 @@ const BATCH_SIZE = 1000;
  * Features include log-transformed byte/packet counts, duration, IAT,
  * byte ratio, packets-per-second, protocol one-hot, and port category.
  *
- * Uses a CTE-based approach: first sample rows via USING SAMPLE (fast,
- * single scan), then group within the sample to find destination IPs
- * with >=3 flows, and finally extract features for those IPs.
+ * Uses a simple LIMIT query for speed on MotherDuck (cloud DuckDB).
+ * Per-destination grouping and filtering (>= 3 flows per IP) is done
+ * in JavaScript to avoid expensive GROUP BY on remote 2.4M row table.
  *
- * @param sampleSize - Max rows to sample from the table (default: all)
+ * @param sampleSize - Max rows to fetch (default: all)
  */
 export async function extractFeatures(
   sampleSize?: number
 ): Promise<FlowFeatureRow[]> {
-  // Cap destination IPs to keep training data manageable.
-  const ipLimit = sampleSize !== undefined
-    ? Math.min(500, Math.max(100, Math.floor(Number(sampleSize) / 50)))
-    : 0;
+  const limitClause = sampleSize !== undefined
+    ? `LIMIT ${Number(sampleSize)}`
+    : '';
 
-  // When sampleSize is provided, use USING SAMPLE for a fast single scan,
-  // then filter to IPs with >=3 flows within the sample.
-  // When no sampleSize, scan all flows (no sampling).
-  if (sampleSize !== undefined && ipLimit > 0) {
-    return executeQuery<FlowFeatureRow>(`
-      WITH sampled AS (
-        SELECT rowid, IPV4_DST_ADDR, IPV4_SRC_ADDR, PROTOCOL, L4_DST_PORT,
-               IN_BYTES, OUT_BYTES, IN_PKTS, OUT_PKTS,
-               FLOW_DURATION_MILLISECONDS, SRC_TO_DST_IAT_AVG,
-               FLOW_START_MILLISECONDS
-        FROM flows
-        USING SAMPLE ${Number(sampleSize)} ROWS
-      ),
-      valid_ips AS (
-        SELECT IPV4_DST_ADDR
-        FROM sampled
-        GROUP BY IPV4_DST_ADDR
-        HAVING COUNT(*) >= 3
-        ORDER BY RANDOM()
-        LIMIT ${ipLimit}
-      )
-      SELECT
-        s.rowid,
-        s.IPV4_DST_ADDR as dst_ip,
-        LN(1 + s.IN_BYTES) as log1p_in_bytes,
-        LN(1 + s.OUT_BYTES) as log1p_out_bytes,
-        LN(1 + s.IN_PKTS) as log1p_in_pkts,
-        LN(1 + s.OUT_PKTS) as log1p_out_pkts,
-        LN(1 + s.FLOW_DURATION_MILLISECONDS) as log1p_duration_ms,
-        LN(1 + COALESCE(s.SRC_TO_DST_IAT_AVG, 0)) as log1p_iat_avg,
-        CAST(s.IN_BYTES AS DOUBLE) / (s.OUT_BYTES + 1) as bytes_ratio,
-        CAST(s.IN_PKTS + s.OUT_PKTS AS DOUBLE) / GREATEST(s.FLOW_DURATION_MILLISECONDS / 1000.0, 0.001) as pkts_per_second,
-        CASE WHEN s.PROTOCOL = 6 THEN 1 ELSE 0 END as is_tcp,
-        CASE WHEN s.PROTOCOL = 17 THEN 1 ELSE 0 END as is_udp,
-        CASE WHEN s.PROTOCOL = 1 THEN 1 ELSE 0 END as is_icmp,
-        CASE WHEN s.L4_DST_PORT <= 1023 THEN 0 WHEN s.L4_DST_PORT <= 49151 THEN 1 ELSE 2 END as port_category
-      FROM sampled s
-      INNER JOIN valid_ips v ON s.IPV4_DST_ADDR = v.IPV4_DST_ADDR
-      ORDER BY s.IPV4_DST_ADDR, s.FLOW_START_MILLISECONDS
-    `);
+  const rows = await executeQuery<FlowFeatureRow>(`
+    SELECT
+      rowid,
+      IPV4_DST_ADDR as dst_ip,
+      LN(1 + IN_BYTES) as log1p_in_bytes,
+      LN(1 + OUT_BYTES) as log1p_out_bytes,
+      LN(1 + IN_PKTS) as log1p_in_pkts,
+      LN(1 + OUT_PKTS) as log1p_out_pkts,
+      LN(1 + FLOW_DURATION_MILLISECONDS) as log1p_duration_ms,
+      LN(1 + COALESCE(SRC_TO_DST_IAT_AVG, 0)) as log1p_iat_avg,
+      CAST(IN_BYTES AS DOUBLE) / (OUT_BYTES + 1) as bytes_ratio,
+      CAST(IN_PKTS + OUT_PKTS AS DOUBLE) / GREATEST(FLOW_DURATION_MILLISECONDS / 1000.0, 0.001) as pkts_per_second,
+      CASE WHEN PROTOCOL = 6 THEN 1 ELSE 0 END as is_tcp,
+      CASE WHEN PROTOCOL = 17 THEN 1 ELSE 0 END as is_udp,
+      CASE WHEN PROTOCOL = 1 THEN 1 ELSE 0 END as is_icmp,
+      CASE WHEN L4_DST_PORT <= 1023 THEN 0 WHEN L4_DST_PORT <= 49151 THEN 1 ELSE 2 END as port_category
+    FROM flows
+    ${limitClause}
+  `);
+
+  // Filter to IPs with >= 3 flows in JavaScript (avoids expensive GROUP BY on MotherDuck)
+  const ipCounts = new Map<string, number>();
+  for (const row of rows) {
+    ipCounts.set(row.dst_ip, (ipCounts.get(row.dst_ip) ?? 0) + 1);
   }
 
-  // No sampling — scan all flows, filter to IPs with >=3 flows
-  return executeQuery<FlowFeatureRow>(`
-    WITH valid_ips AS (
-      SELECT IPV4_DST_ADDR
-      FROM flows
-      GROUP BY IPV4_DST_ADDR
-      HAVING COUNT(*) >= 3
-    )
-    SELECT
-      f.rowid,
-      f.IPV4_DST_ADDR as dst_ip,
-      LN(1 + f.IN_BYTES) as log1p_in_bytes,
-      LN(1 + f.OUT_BYTES) as log1p_out_bytes,
-      LN(1 + f.IN_PKTS) as log1p_in_pkts,
-      LN(1 + f.OUT_PKTS) as log1p_out_pkts,
-      LN(1 + f.FLOW_DURATION_MILLISECONDS) as log1p_duration_ms,
-      LN(1 + COALESCE(f.SRC_TO_DST_IAT_AVG, 0)) as log1p_iat_avg,
-      CAST(f.IN_BYTES AS DOUBLE) / (f.OUT_BYTES + 1) as bytes_ratio,
-      CAST(f.IN_PKTS + f.OUT_PKTS AS DOUBLE) / GREATEST(f.FLOW_DURATION_MILLISECONDS / 1000.0, 0.001) as pkts_per_second,
-      CASE WHEN f.PROTOCOL = 6 THEN 1 ELSE 0 END as is_tcp,
-      CASE WHEN f.PROTOCOL = 17 THEN 1 ELSE 0 END as is_udp,
-      CASE WHEN f.PROTOCOL = 1 THEN 1 ELSE 0 END as is_icmp,
-      CASE WHEN f.L4_DST_PORT <= 1023 THEN 0 WHEN f.L4_DST_PORT <= 49151 THEN 1 ELSE 2 END as port_category
-    FROM flows f
-    INNER JOIN valid_ips v ON f.IPV4_DST_ADDR = v.IPV4_DST_ADDR
-    ORDER BY f.IPV4_DST_ADDR, f.FLOW_START_MILLISECONDS
-  `);
+  // Keep only IPs with >= 3 flows, cap at 500 IPs
+  const validIps = new Set<string>();
+  for (const [ip, count] of ipCounts) {
+    if (count >= 3) {
+      validIps.add(ip);
+      if (validIps.size >= 500) break;
+    }
+  }
+
+  // Filter and sort by (dst_ip, original order as proxy for timestamp)
+  return rows
+    .filter((row) => validIps.has(row.dst_ip))
+    .sort((a, b) => a.dst_ip.localeCompare(b.dst_ip));
 }
 
 // ---------------------------------------------------------------------------

@@ -46,10 +46,14 @@ export async function discoverStates(opts: DiscoveryOptions): Promise<DiscoveryR
   log.info('Starting HMM discovery', { requestedStates, sampleSize })
 
   // Ensure HMM_STATE column exists
+  log.info('Ensuring HMM_STATE column exists...')
   await ensureHmmStateColumn()
+  log.info('HMM_STATE column ensured')
 
   // Extract features from a random sample of flows
+  log.info('Extracting features...', { sampleSize })
   const featureRows = await extractFeatures(sampleSize)
+  log.info('Features extracted', { rowCount: featureRows.length })
   if (featureRows.length < 10) {
     throw new Error('Insufficient data for training (need at least 10 flows)')
   }
