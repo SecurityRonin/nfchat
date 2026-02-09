@@ -295,6 +295,36 @@ describe('trainInWorker', () => {
     })
   })
 
+  describe('BIC with per-destination sequences', () => {
+    it('BIC uses per-group sequences when groupIds provided', async () => {
+      // @ts-expect-error - simulate no Worker
+      globalThis.Worker = undefined
+
+      // 6 groups of 10 flows each = 60 rows
+      // Groups A,B,C cluster near [0,0]; D,E,F cluster near [10,10]
+      const matrix: number[][] = []
+      const groupIds: string[] = []
+      const ips = ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4', '10.0.0.5', '10.0.0.6']
+      for (let g = 0; g < 6; g++) {
+        const base = g < 3 ? 0 : 10
+        for (let i = 0; i < 10; i++) {
+          matrix.push([base + Math.random() * 0.1, base + Math.random() * 0.1])
+          groupIds.push(ips[g])
+        }
+      }
+
+      // With groupIds + BIC auto-select, should complete quickly and find 2 states
+      const t0 = performance.now()
+      const result = await trainInWorker(matrix, 0, undefined, groupIds)
+      const elapsed = performance.now() - t0
+
+      expect(result.nStates).toBeGreaterThanOrEqual(2)
+      expect(result.states).toHaveLength(60)
+      // Per-group BIC should be fast (< 5s even in test environment)
+      expect(elapsed).toBeLessThan(5000)
+    })
+  })
+
   describe('BIC optimization', () => {
     it('BIC auto-selects k=2 for 2-cluster data (range starts at k=2)', async () => {
       // @ts-expect-error - simulate no Worker

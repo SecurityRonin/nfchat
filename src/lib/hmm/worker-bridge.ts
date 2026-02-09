@@ -40,12 +40,15 @@ function trainSynchronously(
     let consecutiveIncreases = 0
 
     // Subsample for BIC scoring if data is large
-    const bicData = scaled.length > 15000 ? scaled.slice(0, 10000) : scaled
+    const bicLimit = scaled.length > 15000 ? 10000 : scaled.length
+    const bicData = scaled.slice(0, bicLimit)
+    const bicGroupIds = groupIds ? groupIds.slice(0, bicLimit) : undefined
+    const bicSequences = buildSequences(bicData, bicGroupIds)
 
     for (let k = 2; k <= 10; k++) {
       const candidate = new GaussianHMM(k, nFeatures, { maxIter: 10, tol: 0.1, seed: 42 })
-      candidate.fit([bicData])
-      const bic = candidate.bic([bicData])
+      candidate.fit(bicSequences)
+      const bic = candidate.bic(bicSequences)
       if (bic < bestBic) {
         bestBic = bic
         nStates = k
