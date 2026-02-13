@@ -10,10 +10,12 @@ import type { AttackSession, KillChainPhase } from '@/lib/motherduck/types'
 // Mock query functions
 const mockGetAttackSessions = vi.fn()
 const mockGetKillChainPhases = vi.fn()
+const mockGetHmmAttackSessions = vi.fn()
 
 vi.mock('@/lib/motherduck/queries', () => ({
   getAttackSessions: (...args: unknown[]) => mockGetAttackSessions(...args),
   getKillChainPhases: (...args: unknown[]) => mockGetKillChainPhases(...args),
+  getHmmAttackSessions: (...args: unknown[]) => mockGetHmmAttackSessions(...args),
 }))
 
 // Sample test data
@@ -75,8 +77,10 @@ describe('KillChainTimeline', () => {
   beforeEach(() => {
     mockGetAttackSessions.mockReset()
     mockGetKillChainPhases.mockReset()
+    mockGetHmmAttackSessions.mockReset()
     mockGetAttackSessions.mockResolvedValue([])
     mockGetKillChainPhases.mockResolvedValue([])
+    mockGetHmmAttackSessions.mockResolvedValue([])
   })
 
   describe('loading state', () => {
@@ -352,6 +356,75 @@ describe('KillChainTimeline', () => {
       await waitFor(() => {
         // Default params: 30 min window, 2 min tactics, 20 limit
         expect(mockGetAttackSessions).toHaveBeenCalledWith(30, 2, 20)
+      })
+    })
+  })
+
+  describe('HMM source mode', () => {
+    const hmmAssignments = { 0: 'Reconnaissance', 1: 'Normal', 2: 'Exfiltration' }
+
+    const hmmSessions: AttackSession[] = [
+      {
+        session_id: '10.0.0.1-hmm-5',
+        src_ip: '10.0.0.1',
+        start_time: 1609459200000,
+        end_time: 1609460100000,
+        duration_minutes: 15,
+        flow_count: 75,
+        tactics: ['Reconnaissance', 'Exfiltration'],
+        techniques: [],
+        target_ips: ['10.0.0.2', '10.0.0.3'],
+        target_ports: [80, 443],
+        total_bytes: 200000,
+      },
+    ]
+
+    it('calls getHmmAttackSessions instead of getAttackSessions when source is hmm', async () => {
+      mockGetHmmAttackSessions.mockResolvedValue(hmmSessions)
+
+      render(
+        <KillChainTimeline source="hmm" tacticAssignments={hmmAssignments} />
+      )
+
+      await waitFor(() => {
+        expect(mockGetHmmAttackSessions).toHaveBeenCalledWith(hmmAssignments, 30, 2, 20)
+        expect(mockGetAttackSessions).not.toHaveBeenCalled()
+      })
+    })
+
+    it('displays HMM-discovered sessions', async () => {
+      mockGetHmmAttackSessions.mockResolvedValue(hmmSessions)
+
+      render(
+        <KillChainTimeline source="hmm" tacticAssignments={hmmAssignments} />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('10.0.0.1')).toBeInTheDocument()
+        expect(screen.getByText(/75 flows/)).toBeInTheDocument()
+      })
+    })
+
+    it('shows HMM-specific header text', async () => {
+      mockGetHmmAttackSessions.mockResolvedValue(hmmSessions)
+
+      render(
+        <KillChainTimeline source="hmm" tacticAssignments={hmmAssignments} />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText(/HMM Discovered/)).toBeInTheDocument()
+      })
+    })
+
+    it('defaults to dataset source when source prop is omitted', async () => {
+      mockGetAttackSessions.mockResolvedValue([])
+
+      render(<KillChainTimeline />)
+
+      await waitFor(() => {
+        expect(mockGetAttackSessions).toHaveBeenCalled()
+        expect(mockGetHmmAttackSessions).not.toHaveBeenCalled()
       })
     })
   })

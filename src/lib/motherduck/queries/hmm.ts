@@ -517,3 +517,78 @@ export async function getStateTemporalDist(): Promise<TemporalBucket[]> {
     ORDER BY bucket
   `);
 }
+
+// ---------------------------------------------------------------------------
+// 13. getHmmAttackSessions
+// ---------------------------------------------------------------------------
+
+/**
+ * Get attack sessions derived from HMM state assignments.
+ *
+ * Groups flows by source IP within time windows, mapping HMM_STATE to
+ * tactic names via the provided assignments. Returns sessions that
+ * contain multiple distinct tactics, similar to getAttackSessions() but
+ * using HMM-discovered labels instead of dataset labels.
+ *
+ * @param tacticAssignments - Map of HMM state ID to MITRE tactic name
+ * @param sessionWindowMinutes - Time window for session grouping (default 30)
+ * @param minTactics - Minimum distinct tactics for inclusion (default 2)
+ * @param limit - Maximum sessions to return (default 50)
+ */
+export async function getHmmAttackSessions(
+  tacticAssignments: Record<number, string>,
+  sessionWindowMinutes: number = 30,
+  minTactics: number = 2,
+  limit: number = 50
+): Promise<import('../types').AttackSession[]> {
+  const windowMs = sessionWindowMinutes * 60 * 1000;
+
+  // Build CASE statement mapping HMM_STATE → tactic name
+  const caseEntries = Object.entries(tacticAssignments)
+    .map(([stateId, tactic]) => `WHEN ${Number(stateId)} THEN '${escapeString(tactic)}'`)
+    .join('\n        ');
+  const tacticCase = `CASE HMM_STATE\n        ${caseEntries}\n        ELSE 'Unknown'\n      END`;
+
+  const results = await executeQuery<import('../types').AttackSession>(`
+    WITH hmm_sessions AS (
+      SELECT
+        IPV4_SRC_ADDR as src_ip,
+        (FLOW_START_MILLISECONDS / ${windowMs}) as session_bucket,
+        MIN(FLOW_START_MILLISECONDS) as start_time,
+        MAX(FLOW_END_MILLISECONDS) as end_time,
+        COUNT(*) as flow_count,
+        LIST(DISTINCT ${tacticCase}) FILTER (WHERE HMM_STATE IS NOT NULL) as tactics,
+        LIST(DISTINCT IPV4_DST_ADDR) as target_ips,
+        LIST(DISTINCT L4_DST_PORT) as target_ports,
+        SUM(IN_BYTES + OUT_BYTES) as total_bytes
+      FROM flows
+      WHERE HMM_STATE IS NOT NULL
+      GROUP BY src_ip, session_bucket
+    )
+    SELECT
+      src_ip || '-hmm-' || session_bucket as session_id,
+      src_ip,
+      start_time,
+      end_time,
+      (end_time - start_time) / 60000.0 as duration_minutes,
+      flow_count,
+      tactics,
+      [] as techniques,
+      target_ips[:10] as target_ips,
+      target_ports[:20] as target_ports,
+      total_bytes
+    FROM hmm_sessions
+    WHERE len(tactics) >= ${minTactics}
+    ORDER BY start_time DESC
+    LIMIT ${limit}
+  `);
+
+  // Ensure array fields are proper JavaScript arrays
+  return results.map(session => ({
+    ...session,
+    tactics: Array.isArray(session.tactics) ? session.tactics : Array.from(session.tactics || []),
+    techniques: Array.isArray(session.techniques) ? session.techniques : Array.from(session.techniques || []),
+    target_ips: Array.isArray(session.target_ips) ? session.target_ips : Array.from(session.target_ips || []),
+    target_ports: Array.isArray(session.target_ports) ? session.target_ports : Array.from(session.target_ports || []),
+  }));
+}

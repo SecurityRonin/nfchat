@@ -14,6 +14,7 @@
 import { extractFeatures, ensureHmmStateColumn, writeStateAssignments, getStateSignatures } from '@/lib/motherduck/queries'
 import { trainInWorker } from './worker-bridge'
 import { scoreAnomalies } from './anomaly'
+import { suggestTactic } from './tactic-suggester'
 import { logger } from '@/lib/logger'
 import type { StateProfile } from '@/lib/store/types'
 
@@ -27,6 +28,7 @@ export interface DiscoveryOptions {
 
 export interface DiscoveryResult {
   profiles: StateProfile[]
+  tacticAssignments: Record<number, string>
   converged: boolean
   iterations: number
   logLikelihood: number
@@ -130,10 +132,18 @@ export async function discoverStates(opts: DiscoveryOptions): Promise<DiscoveryR
     }
   })
 
+  // Auto-suggest ATT&CK tactics for each state
+  const tacticAssignments: Record<number, string> = {}
+  for (const profile of profiles) {
+    const suggestion = suggestTactic(profile)
+    tacticAssignments[profile.stateId] = suggestion.tactic
+  }
+
   log.info('Discovery complete', { nStates: profiles.length, converged: workerResult.converged })
 
   return {
     profiles,
+    tacticAssignments,
     converged: workerResult.converged,
     iterations: workerResult.iterations,
     logLikelihood: workerResult.logLikelihood,

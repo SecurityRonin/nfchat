@@ -84,6 +84,7 @@ export function ForensicDashboard() {
 
   // Kill Chain Timeline panel state
   const [showKillChain, setShowKillChain] = useState(false)
+  const [killChainSource, setKillChainSource] = useState<'dataset' | 'hmm'>('dataset')
   const [selectedSession, setSelectedSession] = useState<AttackSession | null>(null)
 
   // Store state - primitive selectors are already optimal (no object comparison needed)
@@ -97,6 +98,8 @@ export function ForensicDashboard() {
   const setActiveView = useStore((s) => s.setActiveView)
   const selectedHmmState = useStore((s) => s.selectedHmmState)
   const setSelectedHmmState = useStore((s) => s.setSelectedHmmState)
+  const tacticAssignments = useStore((s) => s.tacticAssignments)
+  const hmmStates = useStore((s) => s.hmmStates)
 
   // Store actions - individual selectors for stable references
   const addMessage = useStore((s) => s.addMessage)
@@ -302,6 +305,18 @@ export function ForensicDashboard() {
             >
               {showKillChain ? '✕ Kill Chain' : '⚔ Kill Chain'}
             </button>
+            {showKillChain && hmmStates.length > 0 && Object.keys(tacticAssignments).length > 0 && (
+              <button
+                onClick={() => setKillChainSource(killChainSource === 'dataset' ? 'hmm' : 'dataset')}
+                className={`px-2 py-1 text-xs rounded border transition-colors ${
+                  killChainSource === 'hmm'
+                    ? 'bg-violet-600 text-white border-violet-600'
+                    : 'border-border hover:bg-muted text-muted-foreground'
+                }`}
+              >
+                {killChainSource === 'hmm' ? 'HMM' : 'Labels'}
+              </button>
+            )}
           </div>
         )}
       </header>
@@ -337,6 +352,8 @@ export function ForensicDashboard() {
                   <KillChainTimeline
                     onSessionSelect={handleSessionSelect}
                     className="h-full"
+                    source={killChainSource}
+                    tacticAssignments={killChainSource === 'hmm' ? tacticAssignments : undefined}
                   />
                 ) : (
                   <Chat

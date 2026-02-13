@@ -17,6 +17,10 @@ vi.mock('./anomaly', () => ({
   scoreAnomalies: vi.fn(),
 }))
 
+vi.mock('./tactic-suggester', () => ({
+  suggestTactic: vi.fn(),
+}))
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     child: vi.fn(() => ({
@@ -30,10 +34,17 @@ vi.mock('@/lib/logger', () => ({
 import { extractFeatures, ensureHmmStateColumn, writeStateAssignments, getStateSignatures } from '@/lib/motherduck/queries'
 import { trainInWorker } from './worker-bridge'
 import { scoreAnomalies } from './anomaly'
+import { suggestTactic } from './tactic-suggester'
 
 describe('discoverStates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default: suggestTactic returns Normal for any profile
+    vi.mocked(suggestTactic).mockReturnValue({
+      tactic: 'Normal',
+      confidence: 0.5,
+      reasons: ['Default mock'],
+    })
   })
 
   it('should complete happy path with correct flow', async () => {
@@ -780,5 +791,137 @@ describe('discoverStates', () => {
     expect(result.converged).toBe(false)
     expect(result.iterations).toBe(100)
     expect(result.logLikelihood).toBe(-999.99)
+  })
+
+  it('should call suggestTactic for each profile and return tacticAssignments', async () => {
+    // Arrange
+    const mockFeatureRows = Array.from({ length: 20 }, (_, i) => ({
+      rowid: i,
+      dst_ip: `10.0.0.${(i % 4) + 1}`,
+      log1p_in_bytes: 5.0, log1p_out_bytes: 4.0, log1p_in_pkts: 3.0,
+      log1p_out_pkts: 2.5, log1p_duration_ms: 6.0, log1p_iat_avg: 4.5,
+      bytes_ratio: 1.2, pkts_per_second: 10.0,
+      is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0,
+      is_conn_complete: 1, is_conn_no_reply: 0, is_conn_rejected: 0,
+      log1p_bytes_per_pkt: 4.5, log1p_inter_flow_gap: 2.0,
+    }))
+
+    vi.mocked(ensureHmmStateColumn).mockResolvedValue(undefined)
+    vi.mocked(extractFeatures).mockResolvedValue(mockFeatureRows)
+    vi.mocked(trainInWorker).mockResolvedValue({
+      states: Array.from({ length: 20 }, (_, i) => i % 3),
+      nStates: 3, converged: true, iterations: 30, logLikelihood: -500,
+    })
+    vi.mocked(writeStateAssignments).mockResolvedValue(undefined)
+    vi.mocked(getStateSignatures).mockResolvedValue([
+      {
+        state_id: 0, flow_count: 7, avg_in_bytes: 1024, avg_out_bytes: 512,
+        bytes_ratio: 2.0, avg_duration_ms: 50, avg_pkts_per_sec: 10,
+        tcp_pct: 0.8, udp_pct: 0.2, icmp_pct: 0.0,
+        well_known_pct: 0.5, registered_pct: 0.3, ephemeral_pct: 0.2,
+        conn_complete_pct: 0.3, no_reply_pct: 0.4, rejected_pct: 0.15,
+        avg_bytes_per_pkt: 102.4, avg_inter_flow_gap_ms: 1500,
+      },
+      {
+        state_id: 1, flow_count: 7, avg_in_bytes: 2048, avg_out_bytes: 1024,
+        bytes_ratio: 2.0, avg_duration_ms: 200, avg_pkts_per_sec: 20,
+        tcp_pct: 0.9, udp_pct: 0.1, icmp_pct: 0.0,
+        well_known_pct: 0.7, registered_pct: 0.2, ephemeral_pct: 0.1,
+        conn_complete_pct: 0.85, no_reply_pct: 0.05, rejected_pct: 0.02,
+        avg_bytes_per_pkt: 204.8, avg_inter_flow_gap_ms: 2000,
+      },
+      {
+        state_id: 2, flow_count: 6, avg_in_bytes: 512, avg_out_bytes: 8000,
+        bytes_ratio: 0.06, avg_duration_ms: 3000, avg_pkts_per_sec: 5,
+        tcp_pct: 0.7, udp_pct: 0.3, icmp_pct: 0.0,
+        well_known_pct: 0.3, registered_pct: 0.4, ephemeral_pct: 0.3,
+        conn_complete_pct: 0.6, no_reply_pct: 0.1, rejected_pct: 0.05,
+        avg_bytes_per_pkt: 800, avg_inter_flow_gap_ms: 5000,
+      },
+    ])
+    vi.mocked(scoreAnomalies).mockReturnValue([
+      { stateId: 0, anomalyScore: 50, anomalyFactors: ['bytes_ratio'] },
+      { stateId: 1, anomalyScore: 10, anomalyFactors: [] },
+      { stateId: 2, anomalyScore: 70, anomalyFactors: ['bytes_ratio', 'duration'] },
+    ])
+
+    // Mock suggestTactic to return different tactics per state
+    vi.mocked(suggestTactic)
+      .mockReturnValueOnce({ tactic: 'Reconnaissance', confidence: 0.8, reasons: ['High no-reply'] })
+      .mockReturnValueOnce({ tactic: 'Normal', confidence: 0.6, reasons: ['Healthy traffic'] })
+      .mockReturnValueOnce({ tactic: 'Exfiltration', confidence: 0.7, reasons: ['Outbound-heavy'] })
+
+    // Act
+    const result = await discoverStates({
+      requestedStates: 3,
+      sampleSize: 50000,
+      onProgress: vi.fn(),
+    })
+
+    // Assert: suggestTactic called once per profile
+    expect(suggestTactic).toHaveBeenCalledTimes(3)
+
+    // Assert: tacticAssignments populated
+    expect(result.tacticAssignments).toBeDefined()
+    expect(result.tacticAssignments[0]).toBe('Reconnaissance')
+    expect(result.tacticAssignments[1]).toBe('Normal')
+    expect(result.tacticAssignments[2]).toBe('Exfiltration')
+  })
+
+  it('should populate tacticAssignments as Record<number, string>', async () => {
+    // Arrange: minimal 2-state setup
+    const mockFeatureRows = Array.from({ length: 10 }, (_, i) => ({
+      rowid: i, dst_ip: `10.0.0.${(i % 2) + 1}`,
+      log1p_in_bytes: 5.0, log1p_out_bytes: 4.0, log1p_in_pkts: 3.0,
+      log1p_out_pkts: 2.5, log1p_duration_ms: 6.0, log1p_iat_avg: 4.5,
+      bytes_ratio: 1.2, pkts_per_second: 10.0,
+      is_tcp: 1, is_udp: 0, is_icmp: 0, port_category: 0,
+      is_conn_complete: 1, is_conn_no_reply: 0, is_conn_rejected: 0,
+      log1p_bytes_per_pkt: 4.5, log1p_inter_flow_gap: 2.0,
+    }))
+
+    vi.mocked(ensureHmmStateColumn).mockResolvedValue(undefined)
+    vi.mocked(extractFeatures).mockResolvedValue(mockFeatureRows)
+    vi.mocked(trainInWorker).mockResolvedValue({
+      states: Array.from({ length: 10 }, (_, i) => i % 2),
+      nStates: 2, converged: true, iterations: 20, logLikelihood: -200,
+    })
+    vi.mocked(writeStateAssignments).mockResolvedValue(undefined)
+    vi.mocked(getStateSignatures).mockResolvedValue([
+      {
+        state_id: 0, flow_count: 5, avg_in_bytes: 1024, avg_out_bytes: 512,
+        bytes_ratio: 2.0, avg_duration_ms: 100, avg_pkts_per_sec: 10,
+        tcp_pct: 0.8, udp_pct: 0.2, icmp_pct: 0.0,
+        well_known_pct: 0.5, registered_pct: 0.3, ephemeral_pct: 0.2,
+        conn_complete_pct: 0.9, no_reply_pct: 0.02, rejected_pct: 0.01,
+        avg_bytes_per_pkt: 102.4, avg_inter_flow_gap_ms: 1500,
+      },
+      {
+        state_id: 1, flow_count: 5, avg_in_bytes: 2048, avg_out_bytes: 1024,
+        bytes_ratio: 2.0, avg_duration_ms: 200, avg_pkts_per_sec: 20,
+        tcp_pct: 0.9, udp_pct: 0.1, icmp_pct: 0.0,
+        well_known_pct: 0.7, registered_pct: 0.2, ephemeral_pct: 0.1,
+        conn_complete_pct: 0.85, no_reply_pct: 0.05, rejected_pct: 0.02,
+        avg_bytes_per_pkt: 204.8, avg_inter_flow_gap_ms: 2000,
+      },
+    ])
+    vi.mocked(scoreAnomalies).mockReturnValue([
+      { stateId: 0, anomalyScore: 0, anomalyFactors: [] },
+      { stateId: 1, anomalyScore: 0, anomalyFactors: [] },
+    ])
+    vi.mocked(suggestTactic)
+      .mockReturnValueOnce({ tactic: 'Normal', confidence: 0.7, reasons: ['Healthy'] })
+      .mockReturnValueOnce({ tactic: 'Lateral Movement', confidence: 0.5, reasons: ['Well-known ports'] })
+
+    // Act
+    const result = await discoverStates({
+      requestedStates: 2, sampleSize: 50000, onProgress: vi.fn(),
+    })
+
+    // Assert: tacticAssignments is a Record<number, string>
+    expect(typeof result.tacticAssignments).toBe('object')
+    expect(Object.keys(result.tacticAssignments)).toHaveLength(2)
+    expect(result.tacticAssignments[0]).toBe('Normal')
+    expect(result.tacticAssignments[1]).toBe('Lateral Movement')
   })
 })

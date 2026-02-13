@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, memo, useMemo } from 'react'
-import { getAttackSessions, getKillChainPhases } from '@/lib/motherduck/queries'
+import { getAttackSessions, getKillChainPhases, getHmmAttackSessions } from '@/lib/motherduck/queries'
 import type { AttackSession, KillChainPhase } from '@/lib/motherduck/types'
 import { ATTACK_COLORS, MITRE_TECHNIQUES } from '@/lib/schema'
 import { cn } from '@/lib/utils'
@@ -43,6 +43,8 @@ function sortTactics(tactics: string[]): string[] {
 interface KillChainTimelineProps {
   onSessionSelect?: (session: AttackSession) => void
   className?: string
+  source?: 'dataset' | 'hmm'
+  tacticAssignments?: Record<number, string>
 }
 
 interface SessionItemProps {
@@ -122,12 +124,14 @@ const SessionItem = memo(function SessionItem({
 /**
  * Kill Chain Timeline - visualizes attack sessions with MITRE ATT&CK tactic progression.
  */
-export function KillChainTimeline({ onSessionSelect, className }: KillChainTimelineProps) {
+export function KillChainTimeline({ onSessionSelect, className, source = 'dataset', tacticAssignments }: KillChainTimelineProps) {
   const [sessions, setSessions] = useState<AttackSession[]>([])
   const [selectedSession, setSelectedSession] = useState<AttackSession | null>(null)
   const [phases, setPhases] = useState<KillChainPhase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const isHmm = source === 'hmm'
 
   // Load attack sessions on mount
   useEffect(() => {
@@ -135,7 +139,9 @@ export function KillChainTimeline({ onSessionSelect, className }: KillChainTimel
       setLoading(true)
       setError(null)
       try {
-        const data = await getAttackSessions(30, 2, 20)
+        const data = isHmm && tacticAssignments
+          ? await getHmmAttackSessions(tacticAssignments, 30, 2, 20)
+          : await getAttackSessions(30, 2, 20)
         setSessions(data)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load sessions')
@@ -144,7 +150,7 @@ export function KillChainTimeline({ onSessionSelect, className }: KillChainTimel
       }
     }
     loadSessions()
-  }, [])
+  }, [isHmm, tacticAssignments])
 
   // Load phases when a session is selected
   const handleSessionClick = useCallback(async (session: AttackSession) => {
@@ -195,7 +201,9 @@ export function KillChainTimeline({ onSessionSelect, className }: KillChainTimel
     <div className={cn('flex flex-col h-full', className)}>
       {/* Header */}
       <div className="px-4 py-2 border-b border-border">
-        <h2 className="text-sm font-semibold">Attack Sessions (Kill Chain)</h2>
+        <h2 className="text-sm font-semibold">
+          {isHmm ? 'HMM Discovered Sessions' : 'Attack Sessions (Kill Chain)'}
+        </h2>
         <p className="text-xs text-muted-foreground">
           {sessions.length} sessions with multi-tactic progression
         </p>

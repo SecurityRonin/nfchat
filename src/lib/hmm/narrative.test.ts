@@ -409,4 +409,238 @@ describe('generateNarrative', () => {
       expect(narrative).toContain('mixed port ranges')
     })
   })
+
+  describe('new optional fields: connection completion', () => {
+    const baseState: StateProfile = {
+      stateId: 30,
+      flowCount: 100,
+      avgInBytes: 1000,
+      avgOutBytes: 1000,
+      bytesRatio: 1.0,
+      avgDurationMs: 1000,
+      avgPktsPerSec: 10,
+      protocolDist: { tcp: 1.0, udp: 0, icmp: 0 },
+      portCategoryDist: { wellKnown: 0.5, registered: 0.3, ephemeral: 0.2 },
+    }
+
+    it('high connCompletePct (> 0.8) → mostly completed connections', () => {
+      const state: StateProfile = { ...baseState, connCompletePct: 0.85 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('mostly completed connections')
+    })
+
+    it('low connCompletePct (< 0.3) → predominantly failed connections', () => {
+      const state: StateProfile = { ...baseState, connCompletePct: 0.2 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('predominantly failed connections')
+    })
+
+    it('medium connCompletePct (0.3-0.8) → no connection completion mention', () => {
+      const state: StateProfile = { ...baseState, connCompletePct: 0.5 }
+      const narrative = generateNarrative(state)
+      expect(narrative).not.toContain('completed connections')
+      expect(narrative).not.toContain('failed connections')
+    })
+
+    it('connCompletePct undefined → no connection completion mention', () => {
+      const narrative = generateNarrative(baseState)
+      expect(narrative).not.toContain('completed connections')
+      expect(narrative).not.toContain('failed connections')
+    })
+  })
+
+  describe('new optional fields: noReplyPct', () => {
+    const baseState: StateProfile = {
+      stateId: 31,
+      flowCount: 100,
+      avgInBytes: 1000,
+      avgOutBytes: 1000,
+      bytesRatio: 1.0,
+      avgDurationMs: 1000,
+      avgPktsPerSec: 10,
+      protocolDist: { tcp: 1.0, udp: 0, icmp: 0 },
+      portCategoryDist: { wellKnown: 0.5, registered: 0.3, ephemeral: 0.2 },
+    }
+
+    it('high noReplyPct (> 0.1) → with significant unanswered connection attempts', () => {
+      const state: StateProfile = { ...baseState, noReplyPct: 0.15 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('significant unanswered connection attempts')
+    })
+
+    it('low noReplyPct (<= 0.1) → no mention', () => {
+      const state: StateProfile = { ...baseState, noReplyPct: 0.05 }
+      const narrative = generateNarrative(state)
+      expect(narrative).not.toContain('unanswered')
+    })
+
+    it('noReplyPct undefined → no mention', () => {
+      const narrative = generateNarrative(baseState)
+      expect(narrative).not.toContain('unanswered')
+    })
+  })
+
+  describe('new optional fields: rejectedPct', () => {
+    const baseState: StateProfile = {
+      stateId: 32,
+      flowCount: 100,
+      avgInBytes: 1000,
+      avgOutBytes: 1000,
+      bytesRatio: 1.0,
+      avgDurationMs: 1000,
+      avgPktsPerSec: 10,
+      protocolDist: { tcp: 1.0, udp: 0, icmp: 0 },
+      portCategoryDist: { wellKnown: 0.5, registered: 0.3, ephemeral: 0.2 },
+    }
+
+    it('high rejectedPct (> 0.05) → with notable connection rejections', () => {
+      const state: StateProfile = { ...baseState, rejectedPct: 0.08 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('notable connection rejections')
+    })
+
+    it('low rejectedPct (<= 0.05) → no mention', () => {
+      const state: StateProfile = { ...baseState, rejectedPct: 0.03 }
+      const narrative = generateNarrative(state)
+      expect(narrative).not.toContain('rejection')
+    })
+
+    it('rejectedPct undefined → no mention', () => {
+      const narrative = generateNarrative(baseState)
+      expect(narrative).not.toContain('rejection')
+    })
+  })
+
+  describe('new optional fields: avgBytesPerPkt', () => {
+    const baseState: StateProfile = {
+      stateId: 33,
+      flowCount: 100,
+      avgInBytes: 1000,
+      avgOutBytes: 1000,
+      bytesRatio: 1.0,
+      avgDurationMs: 1000,
+      avgPktsPerSec: 10,
+      protocolDist: { tcp: 1.0, udp: 0, icmp: 0 },
+      portCategoryDist: { wellKnown: 0.5, registered: 0.3, ephemeral: 0.2 },
+    }
+
+    it('low avgBytesPerPkt (< 200) → small packets consistent with signaling', () => {
+      const state: StateProfile = { ...baseState, avgBytesPerPkt: 120 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('small packets consistent with signaling')
+    })
+
+    it('high avgBytesPerPkt (> 1000) → large packets suggesting bulk transfer', () => {
+      const state: StateProfile = { ...baseState, avgBytesPerPkt: 1200 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('large packets suggesting bulk transfer')
+    })
+
+    it('medium avgBytesPerPkt (200-1000) → no packet size mention', () => {
+      const state: StateProfile = { ...baseState, avgBytesPerPkt: 500 }
+      const narrative = generateNarrative(state)
+      expect(narrative).not.toContain('small packets')
+      expect(narrative).not.toContain('large packets')
+    })
+
+    it('avgBytesPerPkt undefined → no packet size mention', () => {
+      const narrative = generateNarrative(baseState)
+      expect(narrative).not.toContain('small packets')
+      expect(narrative).not.toContain('large packets')
+    })
+  })
+
+  describe('new optional fields: avgInterFlowGapMs', () => {
+    const baseState: StateProfile = {
+      stateId: 34,
+      flowCount: 100,
+      avgInBytes: 1000,
+      avgOutBytes: 1000,
+      bytesRatio: 1.0,
+      avgDurationMs: 1000,
+      avgPktsPerSec: 10,
+      protocolDist: { tcp: 1.0, udp: 0, icmp: 0 },
+      portCategoryDist: { wellKnown: 0.5, registered: 0.3, ephemeral: 0.2 },
+    }
+
+    it('low avgInterFlowGapMs (< 500) → in rapid bursts', () => {
+      const state: StateProfile = { ...baseState, avgInterFlowGapMs: 200 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('in rapid bursts')
+    })
+
+    it('high avgInterFlowGapMs (> 30000) → with long pauses between flows', () => {
+      const state: StateProfile = { ...baseState, avgInterFlowGapMs: 45000 }
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('long pauses between flows')
+    })
+
+    it('medium avgInterFlowGapMs (500-30000) → no timing mention', () => {
+      const state: StateProfile = { ...baseState, avgInterFlowGapMs: 5000 }
+      const narrative = generateNarrative(state)
+      expect(narrative).not.toContain('rapid bursts')
+      expect(narrative).not.toContain('long pauses')
+    })
+
+    it('avgInterFlowGapMs undefined → no timing mention', () => {
+      const narrative = generateNarrative(baseState)
+      expect(narrative).not.toContain('rapid bursts')
+      expect(narrative).not.toContain('long pauses')
+    })
+  })
+
+  describe('new optional fields: combined', () => {
+    it('multiple new fields present → all relevant elements in narrative', () => {
+      const state: StateProfile = {
+        stateId: 35,
+        flowCount: 500,
+        avgInBytes: 200,
+        avgOutBytes: 100,
+        bytesRatio: 0.5,
+        avgDurationMs: 50,
+        avgPktsPerSec: 2.5,
+        protocolDist: { tcp: 0.9, udp: 0.1, icmp: 0 },
+        portCategoryDist: { wellKnown: 0.8, registered: 0.15, ephemeral: 0.05 },
+        noReplyPct: 0.25,
+        rejectedPct: 0.1,
+        avgBytesPerPkt: 80,
+        avgInterFlowGapMs: 100,
+        connCompletePct: 0.15,
+      }
+
+      const narrative = generateNarrative(state)
+      expect(narrative).toContain('predominantly failed connections')
+      expect(narrative).toContain('significant unanswered connection attempts')
+      expect(narrative).toContain('notable connection rejections')
+      expect(narrative).toContain('small packets consistent with signaling')
+      expect(narrative).toContain('in rapid bursts')
+    })
+
+    it('existing behavior unchanged when no optional fields present', () => {
+      const state: StateProfile = {
+        stateId: 36,
+        flowCount: 100,
+        avgInBytes: 200,
+        avgOutBytes: 100,
+        bytesRatio: 0.5,
+        avgDurationMs: 50,
+        avgPktsPerSec: 2.5,
+        protocolDist: { tcp: 0.9, udp: 0.1, icmp: 0 },
+        portCategoryDist: { wellKnown: 0.8, registered: 0.15, ephemeral: 0.05 },
+      }
+
+      const narrative = generateNarrative(state)
+      // Should be identical to existing behavior
+      expect(narrative).toContain('short-duration')
+      expect(narrative).toContain('low-volume')
+      expect(narrative).toContain('TCP')
+      // No new elements
+      expect(narrative).not.toContain('connections')
+      expect(narrative).not.toContain('unanswered')
+      expect(narrative).not.toContain('rejection')
+      expect(narrative).not.toContain('packets')
+      expect(narrative).not.toContain('bursts')
+      expect(narrative).not.toContain('pauses')
+    })
+  })
 })

@@ -26,6 +26,7 @@ import {
   ensureHmmStateColumn,
   getStateTransitions,
   getStateTemporalDist,
+  getHmmAttackSessions,
 } from '../hmm';
 import type {
   FlowFeatureRow,
@@ -496,6 +497,86 @@ describe('HMM Query Module', () => {
 
       const result = await getStateTemporalDist();
       expect(result).toEqual(mockRows);
+    });
+  });
+
+  describe('getHmmAttackSessions', () => {
+    it('generates SQL with CASE mapping for tactic assignments', async () => {
+      const assignments: Record<number, string> = {
+        0: 'Reconnaissance',
+        1: 'Normal',
+        2: 'Exfiltration',
+      };
+
+      await getHmmAttackSessions(assignments);
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+      const sql = mockExecuteQuery.mock.calls[0][0];
+
+      // Should build a CASE statement mapping HMM_STATE → tactic name
+      expect(sql).toContain('CASE HMM_STATE');
+      expect(sql).toContain("WHEN 0 THEN 'Reconnaissance'");
+      expect(sql).toContain("WHEN 1 THEN 'Normal'");
+      expect(sql).toContain("WHEN 2 THEN 'Exfiltration'");
+    });
+
+    it('filters to HMM_STATE IS NOT NULL', async () => {
+      await getHmmAttackSessions({ 0: 'Reconnaissance' });
+      const sql = mockExecuteQuery.mock.calls[0][0];
+      expect(sql).toContain('HMM_STATE IS NOT NULL');
+    });
+
+    it('groups by src_ip and session bucket', async () => {
+      await getHmmAttackSessions({ 0: 'Reconnaissance', 1: 'Exfiltration' });
+      const sql = mockExecuteQuery.mock.calls[0][0];
+      expect(sql).toContain('src_ip');
+      expect(sql).toContain('session_bucket');
+      expect(sql).toContain('GROUP BY');
+    });
+
+    it('applies session window, min tactics, and limit parameters', async () => {
+      await getHmmAttackSessions({ 0: 'Recon' }, 60, 3, 10);
+      const sql = mockExecuteQuery.mock.calls[0][0];
+      // 60 min = 3600000 ms
+      expect(sql).toContain('3600000');
+      // minTactics
+      expect(sql).toContain('>= 3');
+      // limit
+      expect(sql).toContain('LIMIT 10');
+    });
+
+    it('escapes single quotes in tactic names', async () => {
+      await getHmmAttackSessions({ 0: "Command and Control's" });
+      const sql = mockExecuteQuery.mock.calls[0][0];
+      expect(sql).toContain("Command and Control''s");
+    });
+
+    it('returns AttackSession-shaped results with array normalization', async () => {
+      const mockResult = [{
+        session_id: '10.0.0.1-hmm-5',
+        src_ip: '10.0.0.1',
+        start_time: 1000,
+        end_time: 2000,
+        duration_minutes: 16.67,
+        flow_count: 50,
+        tactics: ['Reconnaissance', 'Exfiltration'],
+        techniques: [],
+        target_ips: ['10.0.0.2'],
+        target_ports: [80, 443],
+        total_bytes: 100000,
+      }];
+      mockExecuteQuery.mockResolvedValueOnce(mockResult);
+
+      const result = await getHmmAttackSessions({ 0: 'Reconnaissance', 1: 'Exfiltration' });
+      expect(result).toHaveLength(1);
+      expect(result[0].session_id).toContain('hmm');
+      expect(Array.isArray(result[0].tactics)).toBe(true);
+      expect(Array.isArray(result[0].target_ips)).toBe(true);
+    });
+
+    it('returns empty array when no sessions match', async () => {
+      mockExecuteQuery.mockResolvedValueOnce([]);
+      const result = await getHmmAttackSessions({ 0: 'Normal' });
+      expect(result).toEqual([]);
     });
   });
 

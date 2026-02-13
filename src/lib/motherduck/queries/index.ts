@@ -24,6 +24,7 @@ export {
   ensureHmmStateColumn,
   getStateTransitions,
   getStateTemporalDist,
+  getHmmAttackSessions,
 } from './hmm';
 export type {
   FlowFeatureRow,

@@ -25,6 +25,10 @@ export const FILTER_LABEL_TO_COLUMN: Record<string, string> = {
   attack: 'Attack',
   'in bytes': 'IN_BYTES',
   'out bytes': 'OUT_BYTES',
+  'hmm state': 'HMM_STATE',
+  'cluster': 'HMM_STATE',
+  'connection state': 'CONN_STATE',
+  'conn state': 'CONN_STATE',
 };
 
 /**
@@ -40,6 +44,7 @@ export const NUMERIC_COLUMNS = new Set([
   'OUT_PKTS',
   'TCP_FLAGS',
   'Label',
+  'HMM_STATE',
 ]);
 
 /**
@@ -62,4 +67,6 @@ Available columns in the 'flows' table:
 - FLOW_DURATION_MILLISECONDS (BIGINT): Flow duration
 - Attack (VARCHAR): Attack type label (e.g., 'Benign', 'Exploits', 'DoS', 'Fuzzers', etc.)
 - Label (BIGINT): Binary label (0=benign, 1=attack)
+- HMM_STATE (INTEGER): Discovered behavioral cluster ID from unsupervised HMM analysis
+- CONN_STATE (VARCHAR): Zeek connection state (SF=complete, S0=no reply, REJ=rejected, RSTO=reset originator, RSTR=reset responder)
 `;

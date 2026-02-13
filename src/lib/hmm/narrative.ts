@@ -45,6 +45,43 @@ export function generateNarrative(state: StateProfile): string {
     parts.push(`targeting ${portDesc}`)
   }
 
+  // Add optional connection completion info
+  if (state.connCompletePct !== undefined) {
+    if (state.connCompletePct > 0.8) {
+      parts.push('with mostly completed connections')
+    } else if (state.connCompletePct < 0.3) {
+      parts.push('with predominantly failed connections')
+    }
+  }
+
+  // Add optional no-reply info
+  if (state.noReplyPct !== undefined && state.noReplyPct > 0.1) {
+    parts.push('with significant unanswered connection attempts')
+  }
+
+  // Add optional rejection info
+  if (state.rejectedPct !== undefined && state.rejectedPct > 0.05) {
+    parts.push('with notable connection rejections')
+  }
+
+  // Add optional packet size info
+  if (state.avgBytesPerPkt !== undefined) {
+    if (state.avgBytesPerPkt < 200) {
+      parts.push('with small packets consistent with signaling')
+    } else if (state.avgBytesPerPkt > 1000) {
+      parts.push('with large packets suggesting bulk transfer')
+    }
+  }
+
+  // Add optional inter-flow gap info
+  if (state.avgInterFlowGapMs !== undefined) {
+    if (state.avgInterFlowGapMs < 500) {
+      parts.push('in rapid bursts')
+    } else if (state.avgInterFlowGapMs > 30000) {
+      parts.push('with long pauses between flows')
+    }
+  }
+
   return parts.join(' ') + '.'
 }
 
