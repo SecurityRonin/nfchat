@@ -5,7 +5,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildQuerySystemPrompt, buildAnalysisSystemPrompt } from './index';
 import {
-  NETFLOW_SCHEMA,
   NUMERIC_COLUMNS,
   FILTER_LABEL_TO_COLUMN,
 } from '../constants';
