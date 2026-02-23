@@ -20,6 +20,7 @@ function getS3Client(): S3Client {
     region: 'auto',
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    forcePathStyle: true,
   })
 }
 

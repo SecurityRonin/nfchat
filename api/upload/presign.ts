@@ -11,7 +11,6 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { randomUUID } from 'crypto'
 
 const SUPPORTED_EXTENSIONS = ['.parquet', '.csv']
-const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 const PRESIGN_EXPIRY = 600 // 10 minutes
 
 function getS3Client(): S3Client {
@@ -27,6 +26,7 @@ function getS3Client(): S3Client {
     region: 'auto',
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    forcePathStyle: true,
   })
 }
 
@@ -67,7 +67,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: key,
-      ContentLength: MAX_FILE_SIZE, // Max allowed size
     })
 
     const uploadUrl = await getSignedUrl(client, command, {
