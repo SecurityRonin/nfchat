@@ -41,3 +41,6 @@ test-results/
 
 # Demo data
 data/
+
+# Worktrees
+.worktrees/
